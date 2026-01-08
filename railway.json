@@ -1,0 +1,6 @@
+{
+    "build": {
+        "builder": "NIXPACKS",
+        "buildCommand": "apt-get update && apt-get install -y libzip-dev libpng-dev libjpeg-dev libfreetype6-dev && docker-php-ext-configure gd --with-freetype --with-jpeg && docker-php-ext-install -j$(nproc) zip gd pdo pdo_mysql mbstring xml exif pcntl && composer install --optimize-autoloader --no-scripts --no-interaction"
+    }
+}
