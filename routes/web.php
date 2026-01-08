@@ -16,6 +16,93 @@ use App\Http\Controllers\ImportController;
 
 use App\Admin;
 use App\Role;
+use DB;
+
+Route::get('/debug-postgresql-roles', function() {
+    try {
+        // 1. First, check if roles table exists
+        $tableExists = Schema::hasTable('roles');
+        
+        if (!$tableExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Roles table does not exist in database',
+                'suggestion' => 'Run: php artisan make:migration create_roles_table --create=roles'
+            ]);
+        }
+        
+        // 2. Get all columns in roles table
+        $columns = Schema::getColumnListing('roles');
+        
+        // 3. Check all data in roles table
+        $allRoles = DB::table('roles')->get();
+        
+        // 4. Check admin user and their role
+        $admin = Admin::where('email', 'admin@example.com')->first();
+        
+        // 5. Get PostgreSQL specific information
+        $postgresInfo = DB::select("
+            SELECT 
+                table_name,
+                column_name,
+                data_type,
+                is_nullable,
+                column_default
+            FROM information_schema.columns 
+            WHERE table_name = 'roles' 
+            ORDER BY ordinal_position
+        ");
+        
+        // 6. Check constraints
+        $constraints = DB::select("
+            SELECT 
+                tc.constraint_name,
+                tc.constraint_type,
+                kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu 
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_name = 'roles'
+        ");
+        
+        return response()->json([
+            'success' => true,
+            'database_info' => [
+                'connection' => config('database.default'),
+                'driver' => DB::connection()->getDriverName(),
+                'database' => DB::connection()->getDatabaseName(),
+            ],
+            'roles_table' => [
+                'exists' => $tableExists,
+                'columns' => $columns,
+                'postgres_columns' => $postgresInfo,
+                'constraints' => $constraints,
+                'total_records' => $allRoles->count(),
+                'all_data' => $allRoles
+            ],
+            'admin_user' => $admin ? [
+                'id' => $admin->id,
+                'email' => $admin->email,
+                'role_id' => $admin->role_id,
+                'role_from_relation' => $admin->role ?? null
+            ] : 'Admin user not found',
+            'role_model' => [
+                'class_exists' => class_exists('App\\Models\\Role') ? 'App\\Models\\Role' : 
+                                 (class_exists('App\\Role') ? 'App\\Role' : 'Not found'),
+                'fillable_properties' => class_exists('App\\Models\\Role') ? 
+                    (new App\Models\Role())->getFillable() : 
+                    (class_exists('App\\Role') ? (new App\Role())->getFillable() : [])
+            ]
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
 
 Route::get('/assign-admin-role', function() {
     try {
