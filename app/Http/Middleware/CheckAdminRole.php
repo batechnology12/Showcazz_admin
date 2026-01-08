@@ -22,9 +22,13 @@ class CheckAdminRole
         $roles = $this->getRequiredRoleForRoute($request->route());
 
         dd([
-            'user_roles' => $request->user()->roles->pluck('name'),
-            'required_roles' => $roles,
-        ]);
+        'user_role_column' => $request->user()->role ?? 'NO role column',
+        'has_roles_relation' => method_exists($request->user(), 'roles'),
+        'roles_relation' => method_exists($request->user(), 'roles')
+            ? $request->user()->roles->pluck('name')
+            : 'NO RELATION',
+        'required_roles' => $roles
+    ]);
         // Check if a role is required for the route, and
         // if so, ensure that the user has that role.
         if ($request->user()->hasRole($roles) || !$roles) {
