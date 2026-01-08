@@ -44,7 +44,7 @@ return [
       | your application so that it is used when running Artisan tasks.
       |
      */
-    'url' => env('APP_URL', 'http://www.codegurru.com/job_portal/public/'),
+    'url' => env('APP_URL', 'https://showcazzadmin-production.up.railway.app'),
     /*
       |--------------------------------------------------------------------------
       | Application Timezone
