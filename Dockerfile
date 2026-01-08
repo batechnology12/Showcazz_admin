@@ -20,8 +20,13 @@ RUN apt-get update && apt-get install -y \
         xml \
         exif \
         pcntl \
-        bcmath \
-    && a2enmod rewrite headers
+        bcmath
+
+# Configure Apache - Disable conflicting MPM modules
+# Keep only one MPM (prefork is most compatible with PHP)
+RUN a2dismod mpm_event mpm_worker
+RUN a2enmod mpm_prefork
+RUN a2enmod rewrite headers
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -39,11 +44,6 @@ RUN composer install --optimize-autoloader --no-scripts --no-interaction
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
-
-# ⚠️ REMOVE THESE LINES - They try to connect to database during build ⚠️
-# RUN php artisan config:cache \
-#     && php artisan route:cache \
-#     && php artisan view:cache
 
 EXPOSE 8080
 
