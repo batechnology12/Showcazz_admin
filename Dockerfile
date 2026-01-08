@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# Install PostgreSQL extensions
+# Install PostgreSQL extensions FIRST
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     libzip-dev \
@@ -24,11 +24,14 @@ RUN apt-get update && apt-get install -y \
         pcntl \
         bcmath
 
-# Disable all MPM modules FIRST
-RUN a2dismod mpm_event mpm_worker mpm_prefork || true
+# **FIX: Proper MPM configuration - DISABLE all MPMs first**
+RUN a2dismod mpm_event mpm_worker mpm_prefork
 
-# Enable only prefork + required modules
-RUN a2enmod mpm_prefork rewrite headers
+# **FIX: Enable ONLY prefork MPM**
+RUN a2enmod mpm_prefork
+
+# Enable required Apache modules
+RUN a2enmod rewrite headers
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -52,12 +55,30 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Change Apache port to 8080
-RUN sed -i 's/80/8080/g' /etc/apache2/ports.conf \
-    && sed -i 's/:80/:8080/g' /etc/apache2/sites-available/*.conf
+# **FIX: Configure Apache properly**
+# 1. Change port to 8080 in ports.conf
+RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf
+
+# 2. Update default site configuration
+RUN sed -i 's/:80>/:8080>/g' /etc/apache2/sites-available/000-default.conf \
+    && sed -i 's/:80>/:8080>/g' /etc/apache2/sites-available/default-ssl.conf
+
+# 3. Create a custom Apache configuration for Laravel
+RUN echo '<VirtualHost *:8080>\n\
+    ServerAdmin webmaster@localhost\n\
+    DocumentRoot /var/www/html/public\n\
+    \n\
+    <Directory /var/www/html/public>\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+    \n\
+    ErrorLog ${APACHE_LOG_DIR}/error.log\n\
+    CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
 # Copy .env.production as base
-COPY .env.production .env
+# COPY .env.production .env
 
 EXPOSE 8080
 
