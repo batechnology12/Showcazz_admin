@@ -1,36 +1,27 @@
 FROM php:8.2-apache
 
-# Install PostgreSQL extensions FIRST
+# **CRITICAL: Configure Apache FIRST - disable all MPMs, enable only prefork**
+RUN a2dismod mpm_event mpm_worker
+RUN a2enmod mpm_prefork
+
+# Install PHP extensions for PostgreSQL and Laravel
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     libzip-dev \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
-    libxml2-dev \
-    libonig-dev \
-    curl \
-    git \
-    unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
-        zip \
-        gd \
         pdo_pgsql \
         pgsql \
+        gd \
+        zip \
         mbstring \
-        xml \
         exif \
-        pcntl \
-        bcmath
+        pcntl
 
-# **FIX: Proper MPM configuration - DISABLE all MPMs first**
-RUN a2dismod mpm_event mpm_worker mpm_prefork
-
-# **FIX: Enable ONLY prefork MPM**
-RUN a2enmod mpm_prefork
-
-# Enable required Apache modules
+# Enable Apache modules
 RUN a2enmod rewrite headers
 
 # Install Composer
@@ -38,52 +29,57 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy only composer files first for better caching
-COPY composer.json composer.lock ./
-
-# Install dependencies WITHOUT running post-install scripts
-RUN composer install --no-dev --no-autoloader --no-scripts --no-interaction
-
-# Copy the rest of the application
+# Copy application
 COPY . .
 
-# Now run autoloader WITHOUT scripts
-RUN composer dump-autoload --no-scripts --optimize
+# Install dependencies (skip scripts to avoid database errors)
+RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# Fix permissions
+# Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# **FIX: Configure Apache properly**
-# 1. Change port to 8080 in ports.conf
+# **CRITICAL: Configure Apache for Railway**
+# 1. Change port to 8080
 RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf
 
-# 2. Update default site configuration
-RUN sed -i 's/:80>/:8080>/g' /etc/apache2/sites-available/000-default.conf \
-    && sed -i 's/:80>/:8080>/g' /etc/apache2/sites-available/default-ssl.conf
+# 2. Update all VirtualHost configurations
+RUN sed -i 's/:80>/:8080>/g' /etc/apache2/sites-available/*.conf
 
-# 3. Create a custom Apache configuration for Laravel
-RUN echo '<VirtualHost *:8080>\n\
-    ServerAdmin webmaster@localhost\n\
-    DocumentRoot /var/www/html/public\n\
-    \n\
-    <Directory /var/www/html/public>\n\
-        AllowOverride All\n\
-        Require all granted\n\
-    </Directory>\n\
-    \n\
-    ErrorLog ${APACHE_LOG_DIR}/error.log\n\
-    CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
-</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+# 3. Set DocumentRoot to Laravel's public directory
+RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/*.conf
 
-# Copy .env.production as base
-# COPY .env.production .env
+# 4. Configure directory permissions
+RUN echo '<Directory /var/www/html/public>\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
 EXPOSE 8080
 
-# Create startup script
-COPY .railway/start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
-
-CMD ["/usr/local/bin/start.sh"]
+# Startup command
+CMD sh -c " \
+    echo 'Starting Laravel application...' && \
+    # Create .env if missing \
+    if [ ! -f .env ]; then \
+        echo 'Creating .env file...' && \
+        cp .env.example .env; \
+    fi && \
+    # Generate APP_KEY if missing \
+    if ! grep -q '^APP_KEY=base64:' .env || [ -z \"\$(grep '^APP_KEY=base64:' .env | cut -d= -f2)\" ]; then \
+        echo 'Generating application key...' && \
+        php artisan key:generate --force; \
+    fi && \
+    # Run database migrations \
+    echo 'Running migrations...' && \
+    php artisan migrate --force --no-interaction || echo 'Migrations may have failed, continuing...' && \
+    # Cache configurations \
+    echo 'Caching configurations...' && \
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan view:cache && \
+    # Start Apache \
+    echo 'Starting Apache on port 8080...' && \
+    apache2-foreground \
+"
