@@ -19,14 +19,42 @@ use App\Role;
 
 Route::get('/assign-admin-role', function() {
     try {
+        // First, let's see what columns exist in roles table
+        $columns = Schema::getColumnListing('roles');
+        
         // Find or create admin role
-        $adminRole = Role::firstOrCreate(
-            ['code' => 'SUP_ADM'],
-            [
+        // Try different column names that might exist
+        if (in_array('slug', $columns)) {
+            $adminRole = Role::firstOrCreate(
+                ['slug' => 'super-admin'], // Try slug
+                [
+                    'name' => 'Super Administrator',
+                    'description' => 'Full system access'
+                ]
+            );
+        } elseif (in_array('key', $columns)) {
+            $adminRole = Role::firstOrCreate(
+                ['key' => 'super_admin'], // Try key
+                [
+                    'name' => 'Super Administrator',
+                    'description' => 'Full system access'
+                ]
+            );
+        } elseif (in_array('name', $columns)) {
+            // Just use name if that's the only identifier
+            $adminRole = Role::firstOrCreate(
+                ['name' => 'Super Administrator'],
+                [
+                    'description' => 'Full system access'
+                ]
+            );
+        } else {
+            // If no identifier columns, create with just name
+            $adminRole = Role::create([
                 'name' => 'Super Administrator',
                 'description' => 'Full system access'
-            ]
-        );
+            ]);
+        }
         
         // Find admin user
         $admin = Admin::where('email', 'admin@example.com')->first();
@@ -35,7 +63,7 @@ Route::get('/assign-admin-role', function() {
             return response()->json([
                 'success' => false,
                 'message' => 'Admin user not found!',
-                'suggestion' => 'Create admin user first with: php artisan tinker -> App\Models\Admin::create([...])'
+                'existing_admins' => Admin::all()->toArray()
             ]);
         }
         
@@ -46,17 +74,17 @@ Route::get('/assign-admin-role', function() {
         return response()->json([
             'success' => true,
             'message' => 'Role assigned successfully',
+            'debug' => [
+                'roles_table_columns' => $columns,
+                'role_created' => $adminRole->toArray()
+            ],
             'data' => [
                 'admin' => [
                     'id' => $admin->id,
                     'email' => $admin->email,
                     'role_id' => $admin->role_id,
                 ],
-                'role' => [
-                    'id' => $adminRole->id,
-                    'code' => $adminRole->code,
-                    'name' => $adminRole->name,
-                ]
+                'role' => $adminRole->toArray()
             ]
         ]);
         
