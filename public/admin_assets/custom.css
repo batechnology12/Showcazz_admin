@@ -1,0 +1,63 @@
+@charset "utf-8";
+/* CSS Document */
+body {
+  background-color: #013554;
+}
+
+
+.plus { background: url('images/details_open.png') no-repeat center center !important; cursor: pointer;}
+.minus { background: url('images/details_close.png') no-repeat center center !important; cursor: pointer;}
+#sortable { list-style-type: none; margin: 0; padding: 0; width: 100%; }
+#sortable li { margin:15px; padding:2px; font-size: 16px; background: #cedc98; border: 1px solid #DDDDDD; color: #333333; cursor:pointer;}
+
+.paymentboxstabs{background: #eee; padding: 30px;}
+.paymentboxstabs .nav-tabs{border-bottom: none;}
+.paymentboxstabs .nav-tabs>li{float: none;}
+.paymentboxstabs .nav-tabs>li a{font-size: 18px; border: none;}
+.nav-tabs>li.active>a:focus, .nav-tabs>li.active>a{border: none;}
+
+
+.dashnav {
+    list-style: none;
+    padding: 0;
+  }
+  .dashnav li a {
+    display: block;
+    padding: 15px;
+    text-align: center;
+    border-radius: 5px !important;
+    background: #fff;
+    margin-bottom: 30px;
+    color: #000;
+    border: 1px solid #eee;
+  }
+  .dashnav li a i {
+    display: block !important;
+    font-size: 36px;
+    margin-bottom: 10px;
+    width: auto;
+    line-height:normal !important;
+    height: 39px;
+  }
+  .dashnav li a:hover {
+    background: #333;
+    color: #fff;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+    text-decoration: none;
+  }
+
+
+
+  .page-header.navbar {
+    background-color: #eee;
+}
+
+.page-header.navbar .page-logo{padding-top: 5px; padding-right: 0;}
+.page-header.navbar .menu-toggler.sidebar-toggler{margin-top: 6px;}
+
+.page-sidebar, .page-sidebar-closed.page-sidebar-fixed .page-sidebar:hover{    background-color: #013554;}
+.page-sidebar .page-sidebar-menu>li>a, .page-sidebar-closed.page-sidebar-fixed .page-sidebar:hover .page-sidebar-menu>li>a{color: #fff;}
+.page-sidebar .page-sidebar-menu>li>a>i, .page-sidebar-closed.page-sidebar-fixed .page-sidebar:hover .page-sidebar-menu>li>a>i, .page-sidebar-menu>li>a>i[class^=icon-]{color: #fff !important;}
+
+.page-sidebar .page-sidebar-menu>li.open>a, .page-sidebar .page-sidebar-menu>li:hover>a, .page-sidebar-closed.page-sidebar-fixed .page-sidebar:hover .page-sidebar-menu>li.open>a, .page-sidebar-closed.page-sidebar-fixed .page-sidebar:hover .page-sidebar-menu>li:hover>a{background: rgba(0,0,0,0.2);}
+

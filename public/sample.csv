@@ -1,0 +1,3 @@
+company_name,company_id,title,description,benefits,country_id,state_id,city_id,is_freelance,career_level_id,salary_from,salary_to,hide_salary,salary_currency,salary_period_id,functional_area_id,job_type_id,job_shift_id,num_of_positions,gender_id,expiry_date,degree_level_id,job_experience_id,is_active,is_featured,created_at,updated_at,search,slug,logo,postal_code,external_job,job_link
+Lucky Cement,sharjil.hz@gmail.com,Officer/Senior Officer Supply Chain,Test,,,,,,,0,0,0,USD,Monthly,,,,1,Male,,,,1,0,,,,,,,,
+NielsenIQ,employer@jobsportal.com,Senior Executive,Other description,,,,,,,,,0,,,,,,,,,,,1,0,,,,,,,Yes,https://www.careerjet.com.pk/jobad/pkbc7b66119def4ca41322eff369f19bbe
