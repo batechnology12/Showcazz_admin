@@ -13,6 +13,45 @@ use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\ImportController;
 
+
+use App\Admin;
+use App\Role;
+
+
+Route::get('/assign-admin-role', function() {
+    // Find or create admin role
+    $adminRole = Role::firstOrCreate(
+        ['code' => 'SUP_ADM'],
+        [
+            'name' => 'Super Administrator',
+            'description' => 'Full system access'
+        ]
+    );
+    
+    // Find admin user
+    $admin = Admin::where('email', 'admin@example.com')->first();
+    
+    if (!$admin) {
+        return "Admin user not found!";
+    }
+    
+    // Assign role
+    $admin->role_id = $adminRole->id;
+    $admin->save();
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Role assigned successfully',
+        'admin' => [
+            'id' => $admin->id,
+            'email' => $admin->email,
+            'role_id' => $admin->role_id,
+            'role_code' => $adminRole->code,
+            'role_name' => $adminRole->name
+        ]
+    ]);
+});
+
 Route::get('make-login/{guard}', 'IndexController@login')->name('make.login');
 Route::get('company/email/verify', 'Company\CompanyVerificationController@show')->name('company.verification.notice');
 Route::post('company/email/resend', 'Company\CompanyVerificationController@resend')->name('company.verification.resend');
