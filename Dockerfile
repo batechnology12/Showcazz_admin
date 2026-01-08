@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y \
         bcmath \
     && a2enmod rewrite headers
 
-# Install Composer 
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
@@ -40,13 +40,12 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Generate Laravel optimized files
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# ⚠️ REMOVE THESE LINES - They try to connect to database during build ⚠️
+# RUN php artisan config:cache \
+#     && php artisan route:cache \
+#     && php artisan view:cache
 
-# Expose port
 EXPOSE 8080
 
-# Start Apache test
+# Start Apache
 CMD ["apache2-foreground"]
