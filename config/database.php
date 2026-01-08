@@ -59,6 +59,7 @@ return [
             'prefix' => '',
             'schema' => 'public',
             'sslmode' => 'require',
+            // 'sslmode' => 'prefer',
         ],
         'sqlsrv' => [
             'driver' => 'sqlsrv',

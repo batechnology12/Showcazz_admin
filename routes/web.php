@@ -16,83 +16,51 @@ use App\Http\Controllers\ImportController;
 
 use App\Admin;
 use App\Role;
-use DB;
 
-Route::get('/debug-postgresql-roles', function() {
+
+Route::get('/find-or-create-admin', function() {
     try {
-        // 1. First, check if roles table exists
-        $tableExists = Schema::hasTable('roles');
-        
-        if (!$tableExists) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Roles table does not exist in database',
-                'suggestion' => 'Run: php artisan make:migration create_roles_table --create=roles'
-            ]);
-        }
-        
-        // 2. Get all columns in roles table
-        $columns = Schema::getColumnListing('roles');
-        
-        // 3. Check all data in roles table
-        $allRoles = DB::table('roles')->get();
-        
-        // 4. Check admin user and their role
+        // Check if admin exists
         $admin = Admin::where('email', 'admin@example.com')->first();
         
-        // 5. Get PostgreSQL specific information
-        $postgresInfo = DB::select("
-            SELECT 
-                table_name,
-                column_name,
-                data_type,
-                is_nullable,
-                column_default
-            FROM information_schema.columns 
-            WHERE table_name = 'roles' 
-            ORDER BY ordinal_position
-        ");
+        if (!$admin) {
+            // Create admin user
+            $admin = new Admin();
+            $admin->name = 'Administrator';
+            $admin->email = 'admin@example.com';
+            $admin->password = Hash::make('12345678'); // Change this password!
+            $admin->role_id = 1; // Assign Super Admin role (ID 1)
+            $admin->save();
+            
+            $action = 'Created new admin user';
+        } else {
+            // Update existing admin
+            if (!$admin->role_id) {
+                $admin->role_id = 1; // Assign Super Admin role
+                $admin->save();
+                $action = 'Assigned role to existing admin';
+            } else {
+                $action = 'Admin already exists with role';
+            }
+        }
         
-        // 6. Check constraints
-        $constraints = DB::select("
-            SELECT 
-                tc.constraint_name,
-                tc.constraint_type,
-                kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu 
-                ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.table_name = 'roles'
-        ");
+        // Get role details
+        $role = DB::table('roles')->where('id', $admin->role_id)->first();
         
         return response()->json([
             'success' => true,
-            'database_info' => [
-                'connection' => config('database.default'),
-                'driver' => DB::connection()->getDriverName(),
-                'database' => DB::connection()->getDatabaseName(),
-            ],
-            'roles_table' => [
-                'exists' => $tableExists,
-                'columns' => $columns,
-                'postgres_columns' => $postgresInfo,
-                'constraints' => $constraints,
-                'total_records' => $allRoles->count(),
-                'all_data' => $allRoles
-            ],
-            'admin_user' => $admin ? [
+            'message' => 'Admin user ready',
+            'action' => $action,
+            'admin' => [
                 'id' => $admin->id,
+                'name' => $admin->name,
                 'email' => $admin->email,
                 'role_id' => $admin->role_id,
-                'role_from_relation' => $admin->role ?? null
-            ] : 'Admin user not found',
-            'role_model' => [
-                'class_exists' => class_exists('App\\Models\\Role') ? 'App\\Models\\Role' : 
-                                 (class_exists('App\\Role') ? 'App\\Role' : 'Not found'),
-                'fillable_properties' => class_exists('App\\Models\\Role') ? 
-                    (new App\Models\Role())->getFillable() : 
-                    (class_exists('App\\Role') ? (new App\Role())->getFillable() : [])
-            ]
+                'has_password' => !empty($admin->password)
+            ],
+            'role' => $role,
+            'login_url' => url('/admin/login'),
+            'note' => 'Use email: admin@example.com and password you set'
         ]);
         
     } catch (\Exception $e) {
@@ -103,7 +71,6 @@ Route::get('/debug-postgresql-roles', function() {
         ], 500);
     }
 });
-
 Route::get('/assign-admin-role', function() {
     try {
         // First, let's see what columns exist in roles table
