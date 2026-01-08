@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y \
         bcmath \
     && a2enmod rewrite headers
 
-# Install Composer
+# Install Composer 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
@@ -48,5 +48,5 @@ RUN php artisan config:cache \
 # Expose port
 EXPOSE 8080
 
-# Start Apache
+# Start Apache test
 CMD ["apache2-foreground"]
