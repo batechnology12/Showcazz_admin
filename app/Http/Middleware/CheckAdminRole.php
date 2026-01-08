@@ -16,6 +16,8 @@ class CheckAdminRole
      */
     public function handle($request, Closure $next)
     {
+
+        dd('callig');
         // Get the required roles from the route
         $roles = $this->getRequiredRoleForRoute($request->route());
         // Check if a role is required for the route, and
