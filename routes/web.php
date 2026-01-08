@@ -17,39 +17,56 @@ use App\Http\Controllers\ImportController;
 use App\Admin;
 use App\Role;
 
-
 Route::get('/assign-admin-role', function() {
-    // Find or create admin role
-    $adminRole = Role::firstOrCreate(
-        ['code' => 'SUP_ADM'],
-        [
-            'name' => 'Super Administrator',
-            'description' => 'Full system access'
-        ]
-    );
-    
-    // Find admin user
-    $admin = Admin::where('email', 'admin@example.com')->first();
-    
-    if (!$admin) {
-        return "Admin user not found!";
+    try {
+        // Find or create admin role
+        $adminRole = Role::firstOrCreate(
+            ['code' => 'SUP_ADM'],
+            [
+                'name' => 'Super Administrator',
+                'description' => 'Full system access'
+            ]
+        );
+        
+        // Find admin user
+        $admin = Admin::where('email', 'admin@example.com')->first();
+        
+        if (!$admin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Admin user not found!',
+                'suggestion' => 'Create admin user first with: php artisan tinker -> App\Models\Admin::create([...])'
+            ]);
+        }
+        
+        // Assign role
+        $admin->role_id = $adminRole->id;
+        $admin->save();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Role assigned successfully',
+            'data' => [
+                'admin' => [
+                    'id' => $admin->id,
+                    'email' => $admin->email,
+                    'role_id' => $admin->role_id,
+                ],
+                'role' => [
+                    'id' => $adminRole->id,
+                    'code' => $adminRole->code,
+                    'name' => $adminRole->name,
+                ]
+            ]
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage(),
+            'trace' => config('app.debug') ? $e->getTraceAsString() : null
+        ], 500);
     }
-    
-    // Assign role
-    $admin->role_id = $adminRole->id;
-    $admin->save();
-    
-    return response()->json([
-        'success' => true,
-        'message' => 'Role assigned successfully',
-        'admin' => [
-            'id' => $admin->id,
-            'email' => $admin->email,
-            'role_id' => $admin->role_id,
-            'role_code' => $adminRole->code,
-            'role_name' => $adminRole->name
-        ]
-    ]);
 });
 
 Route::get('make-login/{guard}', 'IndexController@login')->name('make.login');
