@@ -39,6 +39,8 @@ class HomeController extends Controller
         $totalTodaysUsers = User::where('created_at', 'like', $today->toDateString() . '%')->count();
         $totalTodaysCompanies = Company::where('created_at', 'like', $today->toDateString() . '%')->count();
         
+
+        dd('testing');
         $documents = [
             'incorporation_or_formation_certificate',
             'valid_tax_clearance',
