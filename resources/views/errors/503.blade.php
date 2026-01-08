@@ -12,7 +12,7 @@
             <div class="row">
                 <div class="col-md-12">
                     <h2>{{ __('Service Unavailable') }}</h2>
-                    <p>{{ __('Be right back.') }} 501 </p>
+                    <p>{{ __('Be right back.') }}</p>
                 </div>
             </div>
         </div>
