@@ -13,37 +13,146 @@ use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\ImportController;
 
-Route::get('/debug-middleware', function() {
+
+Route::get('/test-admin-example', function() {
     try {
-        // Test if admin user exists
-        $admin = \App\Admin::where('email', 'admin@gmail.com')->orWhere('email', 'admin@example.com')->first();
+        // Find the admin@example.com user specifically
+        $admin = \App\Admin::where('email', 'admin@example.com')->first();
         
-        // Test auth guard
+        if (!$admin) {
+            return response()->json([
+                'error' => 'admin@example.com not found in database'
+            ], 404);
+        }
+        
+        // Check authentication for this specific user
         $isAuthed = auth()->guard('admin')->check();
         $authedUser = auth()->guard('admin')->user();
         
-        // Test role
-        if ($admin) {
-            $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $admin->role_id)->first();
+        // Get role
+        $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $admin->role_id)->first();
+        
+        // Test what the middleware does
+        $requiredRoles = ['SUP_ADM', 'SUB_ADM'];
+        $hasAccess = false;
+        
+        if ($role) {
+            foreach ($requiredRoles as $requiredRole) {
+                if ($role->role_abbreviation === $requiredRole || 
+                    $role->role_name === $requiredRole || 
+                    $role->id == $requiredRole) {
+                    $hasAccess = true;
+                    break;
+                }
+            }
         }
         
+        // Check if user has hasRole method
+        $hasRoleMethod = method_exists($admin, 'hasRole');
+        $hasRoleResult = $hasRoleMethod ? $admin->hasRole($requiredRoles) : 'Method not exists';
+        
+        // Simulate middleware check
+        $middlewareResult = [
+            'user_exists' => true,
+            'user_has_role_id' => !empty($admin->role_id),
+            'role_found_in_db' => !empty($role),
+            'user_role_abbr' => $role ? $role->role_abbreviation : null,
+            'matches_SUP_ADM' => $role && $role->role_abbreviation === 'SUP_ADM',
+            'matches_SUB_ADM' => $role && $role->role_abbreviation === 'SUB_ADM',
+            'should_have_access' => $hasAccess
+        ];
+        
         return response()->json([
-            'timestamp' => now(),
-            'admin_users_found' => \App\Admin::count(),
-            'admin_emails' => \App\Admin::pluck('email'),
-            'specific_admin' => $admin ? [
+            'admin_user_details' => [
                 'id' => $admin->id,
                 'email' => $admin->email,
                 'role_id' => $admin->role_id,
-                'role' => $role ?? null
-            ] : null,
-            'auth_check' => [
-                'is_authenticated' => $isAuthed,
-                'user' => $authedUser,
+                'created_at' => $admin->created_at,
+                'updated_at' => $admin->updated_at
             ],
-            'roles_in_db' => \Illuminate\Support\Facades\DB::table('roles')->get(),
-            'middleware_code' => file_get_contents(app_path('Http/Middleware/CheckAdminRole.php'))
+            'role_details' => $role,
+            'authentication_status' => [
+                'is_authenticated' => $isAuthed,
+                'current_user_email' => $authedUser ? $authedUser->email : null,
+                'is_admin_example_com' => $authedUser && $authedUser->email === 'admin@example.com'
+            ],
+            'middleware_simulation' => $middlewareResult,
+            'hasRole_method_check' => [
+                'method_exists' => $hasRoleMethod,
+                'result' => $hasRoleResult
+            ],
+            'required_roles_for_routes' => $requiredRoles,
+            'all_roles_in_database' => \Illuminate\Support\Facades\DB::table('roles')->get()->map(function($r) use ($admin) {
+                return [
+                    'id' => $r->id,
+                    'name' => $r->role_name,
+                    'abbreviation' => $r->role_abbreviation,
+                    'is_assigned_to_admin' => $r->id == $admin->role_id
+                ];
+            }),
+            'potential_issues' => [
+                'role_id_mismatch' => $admin->role_id == 1 && !in_array('admin', $requiredRoles),
+                'needs_SUP_ADM_role' => $admin->role_id != 6, // 6 is SUP_ADM in your DB
+                'authentication_different_user' => $isAuthed && $authedUser && $authedUser->email !== 'admin@example.com'
+            ]
         ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Test admin example error', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => config('app.debug') ? $e->getTraceAsString() : null
+        ], 500);
+    }
+});
+
+
+Route::get('/test-login-admin-example', function() {
+    try {
+        // Attempt to login as admin@example.com
+        $credentials = [
+            'email' => 'admin@example.com',
+            'password' => 'Admin@123' // Use the password you set
+        ];
+        
+        // Check if we can authenticate
+        $canAuth = auth()->guard('admin')->attempt($credentials);
+        
+        if ($canAuth) {
+            $user = auth()->guard('admin')->user();
+            $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $user->role_id)->first();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Login successful',
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'role_id' => $user->role_id
+                ],
+                'role' => $role,
+                'session_id' => session()->getId()
+            ]);
+        } else {
+            // Check why login failed
+            $admin = \App\Admin::where('email', 'admin@example.com')->first();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Login failed',
+                'reasons' => [
+                    'user_exists' => !is_null($admin),
+                    'has_password' => $admin && !empty($admin->password),
+                    'password_hash_match' => $admin ? password_verify('Admin@123', $admin->password) : false,
+                    'actual_password_hash' => $admin ? substr($admin->password, 0, 50) . '...' : null
+                ]
+            ], 401);
+        }
+        
     } catch (\Exception $e) {
         return response()->json([
             'error' => $e->getMessage(),
