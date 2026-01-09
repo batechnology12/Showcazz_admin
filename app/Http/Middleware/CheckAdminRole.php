@@ -20,6 +20,14 @@ class CheckAdminRole
         $roles = $this->getRequiredRoleForRoute($request->route());
         // Check if a role is required for the route, and
         // if so, ensure that the user has that role.
+
+        // In CheckAdminRole middleware, add this check:
+        if ($requiredRoles === ['SUP_ADM'] || $requiredRoles === ['SUB_ADM']) {
+            // Allow access if user has 'admin' role
+            if ($userRole->role_abbreviation === 'admin') {
+                return $next($request);
+            }
+        }
         if ($request->user()->hasRole($roles) || !$roles) {
             return $next($request);
         }
