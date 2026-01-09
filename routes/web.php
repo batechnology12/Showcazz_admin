@@ -116,7 +116,7 @@ Route::get('/test-login-admin-example', function() {
         // Attempt to login as admin@example.com
         $credentials = [
             'email' => 'admin@example.com',
-            'password' => 'Admin@123' // Use the password you set
+            'password' => '12345678' // Use the password you set
         ];
         
         // Check if we can authenticate
