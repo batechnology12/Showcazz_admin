@@ -13,153 +13,29 @@ use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\ImportController;
 
+Route::get('/test-simple', function() {
+    return response()->json([
+        'message' => 'This route works without middleware',
+        'user' => auth()->guard('admin')->user()
+    ]);
+})->middleware(['web', 'auth:admin']);
 
-Route::get('/test-admin-example', function() {
-    try {
-        // Find the admin@example.com user specifically
-        $admin = \App\Admin::where('email', 'admin@example.com')->first();
-        
-        if (!$admin) {
-            return response()->json([
-                'error' => 'admin@example.com not found in database'
-            ], 404);
-        }
-        
-        // Check authentication for this specific user
-        $isAuthed = auth()->guard('admin')->check();
-        $authedUser = auth()->guard('admin')->user();
-        
-        // Get role
-        $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $admin->role_id)->first();
-        
-        // Test what the middleware does
-        $requiredRoles = ['SUP_ADM', 'SUB_ADM'];
-        $hasAccess = false;
-        
-        if ($role) {
-            foreach ($requiredRoles as $requiredRole) {
-                if ($role->role_abbreviation === $requiredRole || 
-                    $role->role_name === $requiredRole || 
-                    $role->id == $requiredRole) {
-                    $hasAccess = true;
-                    break;
-                }
-            }
-        }
-        
-        // Check if user has hasRole method
-        $hasRoleMethod = method_exists($admin, 'hasRole');
-        $hasRoleResult = $hasRoleMethod ? $admin->hasRole($requiredRoles) : 'Method not exists';
-        
-        // Simulate middleware check
-        $middlewareResult = [
-            'user_exists' => true,
-            'user_has_role_id' => !empty($admin->role_id),
-            'role_found_in_db' => !empty($role),
-            'user_role_abbr' => $role ? $role->role_abbreviation : null,
-            'matches_SUP_ADM' => $role && $role->role_abbreviation === 'SUP_ADM',
-            'matches_SUB_ADM' => $role && $role->role_abbreviation === 'SUB_ADM',
-            'should_have_access' => $hasAccess
-        ];
-        
-        return response()->json([
-            'admin_user_details' => [
-                'id' => $admin->id,
-                'email' => $admin->email,
-                'role_id' => $admin->role_id,
-                'created_at' => $admin->created_at,
-                'updated_at' => $admin->updated_at
-            ],
-            'role_details' => $role,
-            'authentication_status' => [
-                'is_authenticated' => $isAuthed,
-                'current_user_email' => $authedUser ? $authedUser->email : null,
-                'is_admin_example_com' => $authedUser && $authedUser->email === 'admin@example.com'
-            ],
-            'middleware_simulation' => $middlewareResult,
-            'hasRole_method_check' => [
-                'method_exists' => $hasRoleMethod,
-                'result' => $hasRoleResult
-            ],
-            'required_roles_for_routes' => $requiredRoles,
-            'all_roles_in_database' => \Illuminate\Support\Facades\DB::table('roles')->get()->map(function($r) use ($admin) {
-                return [
-                    'id' => $r->id,
-                    'name' => $r->role_name,
-                    'abbreviation' => $r->role_abbreviation,
-                    'is_assigned_to_admin' => $r->id == $admin->role_id
-                ];
-            }),
-            'potential_issues' => [
-                'role_id_mismatch' => $admin->role_id == 1 && !in_array('admin', $requiredRoles),
-                'needs_SUP_ADM_role' => $admin->role_id != 6, // 6 is SUP_ADM in your DB
-                'authentication_different_user' => $isAuthed && $authedUser && $authedUser->email !== 'admin@example.com'
-            ]
-        ]);
-        
-    } catch (\Exception $e) {
-        \Log::error('Test admin example error', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => $e->getMessage(),
-            'trace' => config('app.debug') ? $e->getTraceAsString() : null
-        ], 500);
-    }
-});
+// Test 2: Route with the middleware
+Route::get('/test-with-middleware', function() {
+    return response()->json([
+        'message' => 'Middleware passed!',
+        'user' => auth()->guard('admin')->user(),
+        'role' => DB::table('roles')->where('id', auth()->guard('admin')->user()->role_id)->first()
+    ]);
+})->middleware(['web', 'auth:admin', 'checkAdminRoles']);
 
-
-Route::get('/test-login-admin-example', function() {
-    try {
-        // Attempt to login as admin@example.com
-        $credentials = [
-            'email' => 'admin@example.com',
-            'password' => '12345678' // Use the password you set
-        ];
-        
-        // Check if we can authenticate
-        $canAuth = auth()->guard('admin')->attempt($credentials);
-        
-        if ($canAuth) {
-            $user = auth()->guard('admin')->user();
-            $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $user->role_id)->first();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Login successful',
-                'user' => [
-                    'id' => $user->id,
-                    'email' => $user->email,
-                    'role_id' => $user->role_id
-                ],
-                'role' => $role,
-                'session_id' => session()->getId()
-            ]);
-        } else {
-            // Check why login failed
-            $admin = \App\Admin::where('email', 'admin@example.com')->first();
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Login failed',
-                'reasons' => [
-                    'user_exists' => !is_null($admin),
-                    'has_password' => $admin && !empty($admin->password),
-                    'password_hash_match' => $admin ? password_verify('Admin@123', $admin->password) : false,
-                    'actual_password_hash' => $admin ? substr($admin->password, 0, 50) . '...' : null
-                ]
-            ], 401);
-        }
-        
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ], 500);
-    }
-});
+// Test 3: Test specific route pattern
+Route::get('/admin/test-access', function() {
+    return response()->json([
+        'message' => 'Admin route accessible!',
+        'user' => auth()->guard('admin')->user()
+    ]);
+})->middleware(['web', 'auth:admin', 'checkAdminRoles']);
 
 Route::get('make-login/{guard}', 'IndexController@login')->name('make.login');
 Route::get('company/email/verify', 'Company\CompanyVerificationController@show')->name('company.verification.notice');
@@ -180,13 +56,18 @@ Route::get('/', 'IndexController@index')->name('index');
 
 Route::get('/check-time', 'IndexController@checkTime')->name('check-time');
 Route::post('set-locale', 'IndexController@setLocale')->name('set.locale');
+
+
 /* * ******** HomeController ************ */
 Route::get('/email/verify', [VerificationController::class, 'notice'])->name('verification.notice');
 Route::get('/email/verify/{id}/{hash}', [VerificationController::class, 'verify'])->name('verification.verify');
 Route::post('/email/resend', [VerificationController::class, 'resend'])->name('verification.resend');
+
 Route::middleware(['verified'])->group(function(){
     Route::get('home', 'HomeController@index')->name('home');
 });
+
+
 Route::get('all-categories', 'IndexController@allCategories')->name('all-categories');
 /* * ******** TypeAheadController ******* */
 Route::get('typeahead-currency_codes', 'TypeAheadController@typeAheadCurrencyCodes')->name('typeahead.currency_codes');

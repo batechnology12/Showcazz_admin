@@ -1,7 +1,7 @@
 <?php
 
 $all_users = ['allowed_roles' => ['SUP_ADM', 'SUB_ADM', 'admin']];
-$sup_only = ['allowed_roles' => 'SUP_ADM','admin'];
+$sup_only = ['allowed_roles' => ['SUP_ADM', 'admin']];
 Route::get('/home', array_merge(['uses' => 'Admin\HomeController@index'], $all_users))->name('admin.home');
 Route::post('tinymce-image_upload', array_merge(['uses' => 'Admin\TinyMceController@uploadImage'], $all_users))->name('tinymce.image_upload');
 /* * ********************************* */
