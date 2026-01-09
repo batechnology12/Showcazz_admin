@@ -14,24 +14,15 @@ class CheckAdminRole
      * @param  \Closure  $next
      * @return mixed
      */
-   public function handle($request, Closure $next)
+    public function handle($request, Closure $next)
     {
         // Get the required roles from the route
         $roles = $this->getRequiredRoleForRoute($request->route());
-        
-        // ERROR: $requiredRoles is undefined! You're using $roles above
-        if ($requiredRoles === ['SUP_ADM'] || $requiredRoles === ['SUB_ADM']) { // <-- ERROR
-            // ERROR: $userRole is undefined!
-            if ($userRole->role_abbreviation === 'admin') { // <-- ERROR
-                return $next($request);
-            }
-        }
-        
-        // ERROR: $request->user() might be null
-        if ($request->user()->hasRole($roles) || !$roles) { // <-- POTENTIAL ERROR
+        // Check if a role is required for the route, and
+        // if so, ensure that the user has that role.
+        if ($request->user()->hasRole($roles) || !$roles) {
             return $next($request);
         }
-        
         return response()->view('admin.errors.401', [], 401);
     }
 
