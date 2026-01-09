@@ -30,7 +30,7 @@ class HomeController extends Controller
     public function index()
     {
 
-       dd('sgdgdg');
+       
         $today = Carbon::now();
         $totalActiveCompanies = Company::where('is_active', 1)->count();
         $totalInactiveCompanies = Company::where('is_active', 0)->count();
@@ -40,7 +40,7 @@ class HomeController extends Controller
         $totalTodaysCompanies = Company::where('created_at', 'like', $today->toDateString() . '%')->count();
         
 
-
+dd('call');
         $documents = [
             'incorporation_or_formation_certificate',
             'valid_tax_clearance',
