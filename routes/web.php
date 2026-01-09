@@ -13,7 +13,44 @@ use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\ImportController;
 
-
+Route::get('/debug-middleware', function() {
+    try {
+        // Test if admin user exists
+        $admin = \App\Admin::where('email', 'admin@gmail.com')->orWhere('email', 'admin@example.com')->first();
+        
+        // Test auth guard
+        $isAuthed = auth()->guard('admin')->check();
+        $authedUser = auth()->guard('admin')->user();
+        
+        // Test role
+        if ($admin) {
+            $role = \Illuminate\Support\Facades\DB::table('roles')->where('id', $admin->role_id)->first();
+        }
+        
+        return response()->json([
+            'timestamp' => now(),
+            'admin_users_found' => \App\Admin::count(),
+            'admin_emails' => \App\Admin::pluck('email'),
+            'specific_admin' => $admin ? [
+                'id' => $admin->id,
+                'email' => $admin->email,
+                'role_id' => $admin->role_id,
+                'role' => $role ?? null
+            ] : null,
+            'auth_check' => [
+                'is_authenticated' => $isAuthed,
+                'user' => $authedUser,
+            ],
+            'roles_in_db' => \Illuminate\Support\Facades\DB::table('roles')->get(),
+            'middleware_code' => file_get_contents(app_path('Http/Middleware/CheckAdminRole.php'))
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
 
 Route::get('make-login/{guard}', 'IndexController@login')->name('make.login');
 Route::get('company/email/verify', 'Company\CompanyVerificationController@show')->name('company.verification.notice');
