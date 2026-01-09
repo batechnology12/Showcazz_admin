@@ -40,7 +40,7 @@ class HomeController extends Controller
         $totalTodaysCompanies = Company::where('created_at', 'like', $today->toDateString() . '%')->count();
         
 
-dd('call');
+
         $documents = [
             'incorporation_or_formation_certificate',
             'valid_tax_clearance',
@@ -57,7 +57,7 @@ dd('call');
         })
         ->get();
 
-
+       dd('calling');
         $activeCompanies = Company::where('is_active', 1)->get();
        // $inActiveCompanies = Company::where('is_active', 0)->get();
 
