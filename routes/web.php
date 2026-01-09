@@ -13,29 +13,6 @@ use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\IndexController;
 use App\Http\Controllers\ImportController;
 
-Route::get('/test-simple', function() {
-    return response()->json([
-        'message' => 'This route works without middleware',
-        'user' => auth()->guard('admin')->user()
-    ]);
-})->middleware(['web', 'auth:admin']);
-
-// Test 2: Route with the middleware
-Route::get('/test-with-middleware', function() {
-    return response()->json([
-        'message' => 'Middleware passed!',
-        'user' => auth()->guard('admin')->user(),
-        'role' => DB::table('roles')->where('id', auth()->guard('admin')->user()->role_id)->first()
-    ]);
-})->middleware(['web', 'auth:admin', 'checkAdminRoles']);
-
-// Test 3: Test specific route pattern
-Route::get('/admin/test-access', function() {
-    return response()->json([
-        'message' => 'Admin route accessible!',
-        'user' => auth()->guard('admin')->user()
-    ]);
-})->middleware(['web', 'auth:admin', 'checkAdminRoles']);
 
 Route::get('make-login/{guard}', 'IndexController@login')->name('make.login');
 Route::get('company/email/verify', 'Company\CompanyVerificationController@show')->name('company.verification.notice');

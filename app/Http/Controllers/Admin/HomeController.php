@@ -30,7 +30,7 @@ class HomeController extends Controller
     public function index()
     {
 
-       
+       dd('sgdgdg');
         $today = Carbon::now();
         $totalActiveCompanies = Company::where('is_active', 1)->count();
         $totalInactiveCompanies = Company::where('is_active', 0)->count();
