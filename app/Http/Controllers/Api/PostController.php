@@ -1016,82 +1016,81 @@ class PostController extends Controller
     /**
      * Get all posts with filters
      */
-    // public function getPosts(Request $request)
-    // {
-
-    //     try {
-    //         $user = Auth::user();
-    //         $perPage = $request->get('per_page', 20);
-    //         $page = $request->get('page', 1);
+    public function getPosts(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $perPage = $request->get('per_page', 20);
+            $page = $request->get('page', 1);
             
-    //         $query = Post::with([
-    //             'postType',
-    //             'category',
-    //             'subcategory',
-    //             'user',
-    //             'taggedUsers',
-    //             'taggedCompanies',
-    //         ])
-    //         ->where('is_active', true)
-    //         ->where('is_published', true)
-    //         ->orderBy('created_at', 'desc');
+            $query = Post::with([
+                'postType',
+                'category',
+                'subcategory',
+                'user',
+                'taggedUsers',
+                'taggedCompanies',
+            ])
+            ->where('is_active', true)
+            ->where('is_published', true)
+            ->orderBy('created_at', 'desc');
 
-    //         // Apply filters
-    //         if ($request->has('post_type_id')) {
-    //             $query->where('post_type_id', $request->post_type_id);
-    //         }
+            // Apply filters
+            if ($request->has('post_type_id')) {
+                $query->where('post_type_id', $request->post_type_id);
+            }
             
-    //         if ($request->has('category_id')) {
-    //             $query->where('category_id', $request->category_id);
-    //         }
+            if ($request->has('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
             
-    //         if ($request->has('subcategory_id')) {
-    //             $query->where('subcategory_id', $request->subcategory_id);
-    //         }
+            if ($request->has('subcategory_id')) {
+                $query->where('subcategory_id', $request->subcategory_id);
+            }
             
-    //         if ($request->has('user_id')) {
-    //             $query->where('user_id', $request->user_id);
-    //         }
+            if ($request->has('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
             
-    //         if ($request->has('search')) {
-    //             $search = $request->search;
-    //             $query->where(function($q) use ($search) {
-    //                 $q->where('title', 'like', "%{$search}%")
-    //                   ->orWhere('content', 'like', "%{$search}%")
-    //                   ->orWhere('short_description', 'like', "%{$search}%");
-    //             });
-    //         }
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('content', 'like', "%{$search}%")
+                      ->orWhere('short_description', 'like', "%{$search}%");
+                });
+            }
 
-    //         // Get posts with pagination
-    //         $posts = $query->paginate($perPage, ['*'], 'page', $page);
+            // Get posts with pagination
+            $posts = $query->paginate($perPage, ['*'], 'page', $page);
 
-    //         // Format response
-    //         $formattedPosts = $posts->map(function ($post) use ($user) {
-    //             return $this->formatPostResponse($post, false);
-    //         });
+            // Format response
+            $formattedPosts = $posts->map(function ($post) use ($user) {
+                return $this->formatPostResponse($post, false);
+            });
 
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => 'Posts retrieved successfully',
-    //             'data' => [
-    //                 'posts' => $formattedPosts,
-    //                 'pagination' => [
-    //                     'current_page' => $posts->currentPage(),
-    //                     'per_page' => $posts->perPage(),
-    //                     'total' => $posts->total(),
-    //                     'last_page' => $posts->lastPage(),
-    //                 ]
-    //             ]
-    //         ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Posts retrieved successfully',
+                'data' => [
+                    'posts' => $formattedPosts,
+                    'pagination' => [
+                        'current_page' => $posts->currentPage(),
+                        'per_page' => $posts->perPage(),
+                        'total' => $posts->total(),
+                        'last_page' => $posts->lastPage(),
+                    ]
+                ]
+            ]);
 
-    //     } catch (Exception $e) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Failed to retrieve posts',
-    //             'errors' => (object)['server' => 'An error occurred']
-    //         ], 500);
-    //     }
-    // }
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve posts',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
 
     /**
      * Get user's posts
