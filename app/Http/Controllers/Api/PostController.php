@@ -34,8 +34,6 @@ class PostController extends Controller
      */
     public function createPost(Request $request)
     {
-
-    dd('calling');
         try {
             $user = Auth::user();
             
@@ -296,7 +294,6 @@ class PostController extends Controller
      */
     private function createJobPost(Request $request, $user)
     {
-        dd('sddfsgf');
         $validator = Validator::make($request->all(), [
             'post_type_id' => 'required|exists:post_types,id',
             'category_id' => 'required|in:5',
@@ -352,9 +349,6 @@ class PostController extends Controller
                 'timeline_end' => 'required|date|after_or_equal:timeline_start',
             ]);
         }
-
-
-      
         // Internship specific validation
         elseif ($request->subcategory_id == 14) {
             $validator->addRules([
@@ -368,7 +362,6 @@ class PostController extends Controller
                 'application_deadline' => 'required|date|after:today',
             ]);
         }
-        
         // Full-Time specific validation
         elseif ($request->subcategory_id == 15) {
             $validator->addRules([
@@ -1025,6 +1018,9 @@ class PostController extends Controller
      */
     public function getPosts(Request $request)
     {
+
+
+    dd('cvfv');
         try {
             $user = Auth::user();
             $perPage = $request->get('per_page', 20);
