@@ -294,6 +294,7 @@ class PostController extends Controller
      */
     private function createJobPost(Request $request, $user)
     {
+        dd('sddfsgf');
         $validator = Validator::make($request->all(), [
             'post_type_id' => 'required|exists:post_types,id',
             'category_id' => 'required|in:5',
@@ -351,7 +352,7 @@ class PostController extends Controller
         }
 
 
-        dd('woring 1')
+      
         // Internship specific validation
         elseif ($request->subcategory_id == 14) {
             $validator->addRules([
@@ -365,7 +366,7 @@ class PostController extends Controller
                 'application_deadline' => 'required|date|after:today',
             ]);
         }
-        dd('woring 2')
+        
         // Full-Time specific validation
         elseif ($request->subcategory_id == 15) {
             $validator->addRules([
@@ -377,7 +378,7 @@ class PostController extends Controller
                 'application_deadline' => 'required|date|after:today',
             ]);
         }
-dd('woring 3')
+
         if ($validator->fails()) {
             $errors = [];
             foreach ($validator->errors()->toArray() as $field => $messages) {
@@ -392,7 +393,7 @@ dd('woring 3')
         }
 
         DB::beginTransaction();
-dd('woring 4')
+
         try {
             // Handle image uploads
             $imagePaths = [];
