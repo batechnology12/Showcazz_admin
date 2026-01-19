@@ -34,6 +34,8 @@ class PostController extends Controller
      */
     public function createPost(Request $request)
     {
+
+    dd('calling');
         try {
             $user = Auth::user();
             
