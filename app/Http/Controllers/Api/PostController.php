@@ -349,6 +349,9 @@ class PostController extends Controller
                 'timeline_end' => 'required|date|after_or_equal:timeline_start',
             ]);
         }
+
+
+        dd('woring 1')
         // Internship specific validation
         elseif ($request->subcategory_id == 14) {
             $validator->addRules([
@@ -362,6 +365,7 @@ class PostController extends Controller
                 'application_deadline' => 'required|date|after:today',
             ]);
         }
+        dd('woring 2')
         // Full-Time specific validation
         elseif ($request->subcategory_id == 15) {
             $validator->addRules([
@@ -373,7 +377,7 @@ class PostController extends Controller
                 'application_deadline' => 'required|date|after:today',
             ]);
         }
-
+dd('woring 3')
         if ($validator->fails()) {
             $errors = [];
             foreach ($validator->errors()->toArray() as $field => $messages) {
@@ -388,7 +392,7 @@ class PostController extends Controller
         }
 
         DB::beginTransaction();
-
+dd('woring 4')
         try {
             // Handle image uploads
             $imagePaths = [];
