@@ -2,54 +2,60 @@
 
 namespace App\Exceptions;
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class Handler extends ExceptionHandler
 {
     /**
-     * A list of the exception types that are not reported.
+     * Convert an authentication exception into a response.
      *
-     * @var array
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Auth\AuthenticationException  $exception
+     * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
      */
-    protected $dontReport = [
-        //
-    ];
-
-    /**
-     * A list of the inputs that are never flashed for validation exceptions.
-     *
-     * @var array
-     */
-    protected $dontFlash = [
-        'password',
-        'password_confirmation',
-    ];
-
-    /**
-     * Report or log an exception.
-     *
-     * @param  \Throwable  $exception
-     * @return void
-     *
-     * @throws \Exception
-     */
-    public function report(Throwable $exception)
+    protected function unauthenticated($request, AuthenticationException $exception)
     {
-        parent::report($exception);
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated',
+                'error' => 'Your session has expired or you are not logged in.',
+                'code' => 'UNAUTHENTICATED'
+            ], 401);
+        }
+
+        return redirect()->guest($exception->redirectTo() ?? route('login'));
     }
 
     /**
-     * Render an exception into an HTTP response.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Throwable  $exception
-     * @return \Symfony\Component\HttpFoundation\Response
-     *
-     * @throws \Throwable
+     * Register the exception handling callbacks for the application.
      */
-    public function render($request, Throwable $exception)
+    public function register(): void
     {
-        return parent::render($request, $exception);
+        $this->renderable(function (AuthenticationException $e, $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated',
+                    'error' => 'Token is invalid or has expired.',
+                    'code' => 'TOKEN_EXPIRED'
+                ], 401);
+            }
+        });
+        
+        // Handle token expired specifically for Sanctum
+        $this->renderable(function (\Laravel\Sanctum\Exceptions\MissingAbilityException $e, $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access Denied',
+                    'error' => 'Token does not have required permissions.',
+                ], 403);
+            }
+        });
     }
 }
