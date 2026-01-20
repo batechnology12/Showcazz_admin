@@ -58,8 +58,8 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'schema' => 'public',
-            'sslmode' => 'require',
-             //'sslmode' => 'prefer',
+            //'sslmode' => 'require',
+             'sslmode' => 'prefer',
         ],
         'sqlsrv' => [
             'driver' => 'sqlsrv',
