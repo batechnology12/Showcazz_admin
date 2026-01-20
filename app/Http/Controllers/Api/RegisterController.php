@@ -588,142 +588,338 @@ class RegisterController extends Controller
 
 
     public function login(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'email' => 'required|email',
-                'password' => 'required|string|min:6',
-            ]);
-            if ($validator->fails()) {
-                $errors = [];
-                foreach ($validator->errors()->toArray() as $field => $messages) {
-                    $errors[$field] = $messages[0];
-                }
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|string|min:6',
+        ]);
+        
+        if ($validator->fails()) {
+            $errors = [];
+            foreach ($validator->errors()->toArray() as $field => $messages) {
+                $errors[$field] = $messages[0];
+            }
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => (object)$errors 
+            ], 422);
+        }
+
+        // Try User login (Student/Professional)
+        $user = User::where('email', $request->email)->first();
+        
+        if ($user && Hash::check($request->password, $user->password)) {
+            try {
+                $token = $user->createToken('auth_token')->plainTextToken;
+                
+                // Check profile completion status
+                $isProfileCompleted = $this->checkUserProfileCompletion($user);
+                
+                $userData = [
+                    'id' => $user->id,
+                    'name' => $user->getName(),
+                    'email' => $user->email,
+                    'usertype' => $user->usertype ?? 'professional',
+                    'email_verified_at' => $user->email_verified_at,
+                    'profile_image' => $user->image ? asset('user_images/'.$user->image) : null,
+                    'headline' => $user->headline ?? null,
+                    'location' => $user->location ?? null,
+                    'is_profile_completed' => $isProfileCompleted, // Add this
+                ];
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Login successful',
+                    'data' => [
+                        'user' => $userData,
+                        'access_token' => $token,
+                        'token_type' => 'Bearer',
+                        'role' => $user->usertype ?? 'professional',
+                        'profile_completed' => $isProfileCompleted, // Also include at top level
+                    ]
+                ]);
+                
+            } catch (Exception $e) {
+                Log::error('Token creation failed for user: ' . $user->id, [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
                 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => (object)$errors 
-                ], 422);
+                    'message' => 'Authentication failed',
+                    'errors' => (object)[
+                        'auth' => 'Unable to create authentication token'
+                    ]
+                ], 500);
             }
-
-            // Try User login (Student/Professional)
-            $user = User::where('email', $request->email)->first();
-            
-            if ($user && Hash::check($request->password, $user->password)) {
-                try {
-                    $token = $user->createToken('auth_token')->plainTextToken;
-                    
-                    $userData = [
-                        'id' => $user->id,
-                        'name' => $user->getName(),
-                        'email' => $user->email,
-                        'usertype' => $user->usertype ?? 'professional',
-                        'email_verified_at' => $user->email_verified_at,
-                        'profile_image' => $user->image ? asset('user_images/'.$user->image) : null,
-                        'headline' => $user->headline ?? null,
-                        'location' => $user->location ?? null,
-                    ];
-
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Login successful',
-                        'data' => [
-                            'user' => $userData,
-                            'access_token' => $token,
-                            'token_type' => 'Bearer',
-                            'role' => $user->usertype ?? 'professional' 
-                        ]
-                    ]);
-                    
-                } catch (Exception $e) {
-                    Log::error('Token creation failed for user: ' . $user->id, [
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Authentication failed',
-                        'errors' => (object)[
-                            'auth' => 'Unable to create authentication token'
-                        ]
-                    ], 500);
-                }
-            }
-
-            // Try Company login
-            $company = Company::where('email', $request->email)->first();
-            
-            if ($company && Hash::check($request->password, $company->password)) {
-                try {
-                    $token = $company->createToken('company_auth_token')->plainTextToken;
-                    
-                    $companyData = [
-                        'id' => $company->id,
-                        'name' => $company->name,
-                        'email' => $company->email,
-                        'usertype' => 'company',
-                        'slug' => $company->slug,
-                        'email_verified_at' => $company->email_verified_at,
-                        'logo' => $company->logo ? asset('company_logos/'.$company->logo) : null,
-                        'industry' => $company->getIndustry('industry') ?? null,
-                        'location' => $company->location ?? null,
-                    ];
-
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Login successful',
-                        'data' => [
-                            'user' => $companyData,
-                            'access_token' => $token,
-                            'token_type' => 'Bearer',
-                            'role' => 'company'
-                        ]
-                    ]);
-                    
-                } catch (Exception $e) {
-                    Log::error('Token creation failed for company: ' . $company->id, [
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Authentication failed',
-                        'errors' => (object)[
-                            'auth' => 'Unable to create authentication token'
-                        ]
-                    ], 500);
-                }
-            }
-
-            // Invalid credentials
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid credentials',
-                'errors' => (object)[
-                    'email' => 'These credentials do not match our records.'
-                ]
-            ], 401);
-
-        } catch (Exception $e) {
-            // Log the unexpected error
-            Log::error('Login API Error: ', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'An unexpected error occurred',
-                'errors' => (object)[
-                    'server' => 'Internal server error. Please try again later.'
-                ]
-            ], 500);
         }
+
+        // Try Company login
+        $company = Company::where('email', $request->email)->first();
+        
+        if ($company && Hash::check($request->password, $company->password)) {
+            try {
+                $token = $company->createToken('company_auth_token')->plainTextToken;
+                
+                // Check profile completion status
+                $isProfileCompleted = $this->checkCompanyProfileCompletion($company);
+                
+                $companyData = [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'email' => $company->email,
+                    'usertype' => 'company',
+                    'slug' => $company->slug,
+                    'email_verified_at' => $company->email_verified_at,
+                    'logo' => $company->logo ? asset('company_logos/'.$company->logo) : null,
+                    'industry' => $company->getIndustry('industry') ?? null,
+                    'location' => $company->location ?? null,
+                    'is_profile_completed' => $isProfileCompleted, // Add this
+                ];
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Login successful',
+                    'data' => [
+                        'user' => $companyData,
+                        'access_token' => $token,
+                        'token_type' => 'Bearer',
+                        'role' => 'company',
+                        'profile_completed' => $isProfileCompleted, // Also include at top level
+                    ]
+                ]);
+                
+            } catch (Exception $e) {
+                Log::error('Token creation failed for company: ' . $company->id, [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication failed',
+                    'errors' => (object)[
+                        'auth' => 'Unable to create authentication token'
+                    ]
+                ], 500);
+            }
+        }
+
+        // Invalid credentials
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid credentials',
+            'errors' => (object)[
+                'email' => 'These credentials do not match our records.'
+            ]
+        ], 401);
+
+    } catch (Exception $e) {
+        // Log the unexpected error
+        Log::error('Login API Error: ', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'request' => $request->all()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'An unexpected error occurred',
+            'errors' => (object)[
+                'server' => 'Internal server error. Please try again later.'
+            ]
+        ], 500);
     }
+}
+
+/**
+ * Check User Profile Completion Helper
+ */
+private function checkUserProfileCompletion($user)
+{
+    try {
+        $requiredFields = ['first_name', 'last_name'];
+        $isCompleted = true;
+        
+        foreach ($requiredFields as $field) {
+            if (empty($user->$field)) {
+                $isCompleted = false;
+                break;
+            }
+        }
+        
+        return $isCompleted;
+    } catch (Exception $e) {
+        Log::error('Error checking user profile completion: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Check Company Profile Completion Helper
+ */
+private function checkCompanyProfileCompletion($company)
+{
+    try {
+        $requiredFields = ['name', 'slug'];
+        $isCompleted = true;
+        
+        foreach ($requiredFields as $field) {
+            if (empty($company->$field)) {
+                $isCompleted = false;
+                break;
+            }
+        }
+        
+        return $isCompleted;
+    } catch (Exception $e) {
+        Log::error('Error checking company profile completion: ' . $e->getMessage());
+        return false;
+    }
+}
+
+
+    // public function login(Request $request)
+    // {
+    //     try {
+    //         $validator = Validator::make($request->all(), [
+    //             'email' => 'required|email',
+    //             'password' => 'required|string|min:6',
+    //         ]);
+    //         if ($validator->fails()) {
+    //             $errors = [];
+    //             foreach ($validator->errors()->toArray() as $field => $messages) {
+    //                 $errors[$field] = $messages[0];
+    //             }
+                
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Validation failed',
+    //                 'errors' => (object)$errors 
+    //             ], 422);
+    //         }
+
+    //         // Try User login (Student/Professional)
+    //         $user = User::where('email', $request->email)->first();
+            
+    //         if ($user && Hash::check($request->password, $user->password)) {
+    //             try {
+    //                 $token = $user->createToken('auth_token')->plainTextToken;
+                    
+    //                 $userData = [
+    //                     'id' => $user->id,
+    //                     'name' => $user->getName(),
+    //                     'email' => $user->email,
+    //                     'usertype' => $user->usertype ?? 'professional',
+    //                     'email_verified_at' => $user->email_verified_at,
+    //                     'profile_image' => $user->image ? asset('user_images/'.$user->image) : null,
+    //                     'headline' => $user->headline ?? null,
+    //                     'location' => $user->location ?? null,
+    //                 ];
+
+    //                 return response()->json([
+    //                     'success' => true,
+    //                     'message' => 'Login successful',
+    //                     'data' => [
+    //                         'user' => $userData,
+    //                         'access_token' => $token,
+    //                         'token_type' => 'Bearer',
+    //                         'role' => $user->usertype ?? 'professional' 
+    //                     ]
+    //                 ]);
+                    
+    //             } catch (Exception $e) {
+    //                 Log::error('Token creation failed for user: ' . $user->id, [
+    //                     'error' => $e->getMessage(),
+    //                     'trace' => $e->getTraceAsString()
+    //                 ]);
+                    
+    //                 return response()->json([
+    //                     'success' => false,
+    //                     'message' => 'Authentication failed',
+    //                     'errors' => (object)[
+    //                         'auth' => 'Unable to create authentication token'
+    //                     ]
+    //                 ], 500);
+    //             }
+    //         }
+
+    //         // Try Company login
+    //         $company = Company::where('email', $request->email)->first();
+            
+    //         if ($company && Hash::check($request->password, $company->password)) {
+    //             try {
+    //                 $token = $company->createToken('company_auth_token')->plainTextToken;
+                    
+    //                 $companyData = [
+    //                     'id' => $company->id,
+    //                     'name' => $company->name,
+    //                     'email' => $company->email,
+    //                     'usertype' => 'company',
+    //                     'slug' => $company->slug,
+    //                     'email_verified_at' => $company->email_verified_at,
+    //                     'logo' => $company->logo ? asset('company_logos/'.$company->logo) : null,
+    //                     'industry' => $company->getIndustry('industry') ?? null,
+    //                     'location' => $company->location ?? null,
+    //                 ];
+
+    //                 return response()->json([
+    //                     'success' => true,
+    //                     'message' => 'Login successful',
+    //                     'data' => [
+    //                         'user' => $companyData,
+    //                         'access_token' => $token,
+    //                         'token_type' => 'Bearer',
+    //                         'role' => 'company'
+    //                     ]
+    //                 ]);
+                    
+    //             } catch (Exception $e) {
+    //                 Log::error('Token creation failed for company: ' . $company->id, [
+    //                     'error' => $e->getMessage(),
+    //                     'trace' => $e->getTraceAsString()
+    //                 ]);
+                    
+    //                 return response()->json([
+    //                     'success' => false,
+    //                     'message' => 'Authentication failed',
+    //                     'errors' => (object)[
+    //                         'auth' => 'Unable to create authentication token'
+    //                     ]
+    //                 ], 500);
+    //             }
+    //         }
+
+    //         // Invalid credentials
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Invalid credentials',
+    //             'errors' => (object)[
+    //                 'email' => 'These credentials do not match our records.'
+    //             ]
+    //         ], 401);
+
+    //     } catch (Exception $e) {
+    //         // Log the unexpected error
+    //         Log::error('Login API Error: ', [
+    //             'error' => $e->getMessage(),
+    //             'trace' => $e->getTraceAsString(),
+    //             'request' => $request->all()
+    //         ]);
+            
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'An unexpected error occurred',
+    //             'errors' => (object)[
+    //                 'server' => 'Internal server error. Please try again later.'
+    //             ]
+    //         ], 500);
+    //     }
+    // }
 
     /**
      * Logout API with try-catch
