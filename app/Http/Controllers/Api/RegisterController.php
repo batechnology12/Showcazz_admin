@@ -524,7 +524,7 @@ class RegisterController extends Controller
                 'success' => false,
                 'message' => 'Profile completion failed',
                 'errors' => (object)[
-                    'server' => 'An error occurred'
+                    'server' => $e->getMessage()
                 ]
             ], 500);
         }
