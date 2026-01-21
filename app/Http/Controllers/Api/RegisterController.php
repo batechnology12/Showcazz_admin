@@ -287,166 +287,327 @@ class RegisterController extends Controller
     // }
 
 
-   public function completeUserProfile(Request $request)
-    {
-        try {
-            $user = $request->user();
+//    public function completeUserProfile(Request $request)
+//     {
+//         try {
+//             $user = $request->user();
             
-            if (!$user || $user instanceof \App\Company) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid user type or not authenticated'
-                ], 400);
-            }
+//             if (!$user || $user instanceof \App\Company) {
+//                 return response()->json([
+//                     'success' => false,
+//                     'message' => 'Invalid user type or not authenticated'
+//                 ], 400);
+//             }
 
-            $validator = Validator::make($request->all(), [
-                'full_name' => 'required|string|max:100',
-                'college_name' => 'nullable|string|max:255',
-                'school_name' => 'nullable|string|max:255',
-                'degree' => 'nullable|string|max:255',
-                'course_duration' => 'nullable|string|max:100',
-                'specialization' => 'nullable|array', // Keep as array for input
-                'specialization.*' => 'exists:job_skills,id', // Changed to job_skills table
-                'portfolio_website' => 'nullable|url|max:255',
-                'area_of_interest_ids' => 'nullable|array',
-                'area_of_interest_ids.*' => 'exists:job_titles,id',
-                'visibility_control' => 'sometimes|in:public,private',
-                'phone' => 'nullable|string|max:20',
-                'headline' => 'nullable|string|max:255',
-            ]);
+//             $validator = Validator::make($request->all(), [
+//                 'full_name' => 'required|string|max:100',
+//                 'college_name' => 'nullable|string|max:255',
+//                 'school_name' => 'nullable|string|max:255',
+//                 'degree' => 'nullable|string|max:255',
+//                 'course_duration' => 'nullable|string|max:100',
+//                 'specialization' => 'nullable|array', // Keep as array for input
+//                 'specialization.*' => 'exists:job_skills,id', // Changed to job_skills table
+//                 'portfolio_website' => 'nullable|url|max:255',
+//                 'area_of_interest_ids' => 'nullable|array',
+//                 'area_of_interest_ids.*' => 'exists:job_titles,id',
+//                 'visibility_control' => 'sometimes|in:public,private',
+//                 'phone' => 'nullable|string|max:20',
+//                 'headline' => 'nullable|string|max:255',
+//             ]);
 
-            if ($validator->fails()) {
-                $errors = [];
-                foreach ($validator->errors()->toArray() as $field => $messages) {
-                    $errors[$field] = $messages[0];
-                }
+//             if ($validator->fails()) {
+//                 $errors = [];
+//                 foreach ($validator->errors()->toArray() as $field => $messages) {
+//                     $errors[$field] = $messages[0];
+//                 }
                 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => (object)$errors
-                ], 422);
-            }
+//                 return response()->json([
+//                     'success' => false,
+//                     'message' => 'Validation failed',
+//                     'errors' => (object)$errors
+//                 ], 422);
+//             }
 
-            DB::beginTransaction();
+//             DB::beginTransaction();
 
-            try {
-                // Update user basic info
-                $user->first_name = $request->full_name;
+//             try {
+//                 // Update user basic info
+//                 $user->first_name = $request->full_name;
             
-                // Update other fields
-                $user->college_name = $request->college_name;
-                $user->school_name = $request->school_name;
-                $user->degree = $request->degree;
-                $user->course_duration = $request->course_duration;
+//                 // Update other fields
+//                 $user->college_name = $request->college_name;
+//                 $user->school_name = $request->school_name;
+//                 $user->degree = $request->degree;
+//                 $user->course_duration = $request->course_duration;
                 
-                // Professional-specific fields
-                if ($user->usertype == 'professional' || $user->usertype == 'student') {
-                    // Handle specialization array - store as comma-separated string
-                    if (!empty($request->specialization) && is_array($request->specialization)) {
-                        // Store as comma-separated string in the VARCHAR column
-                        $user->specialization = implode(',', $request->specialization);
-                    } else {
-                        // Clear specialization if empty
-                        $user->specialization = null;
-                    }
+//                 // Professional-specific fields
+//                 if ($user->usertype == 'professional' || $user->usertype == 'student') {
+//                     // Handle specialization array - store as comma-separated string
+//                     if (!empty($request->specialization) && is_array($request->specialization)) {
+//                         // Store as comma-separated string in the VARCHAR column
+//                         $user->specialization = implode(',', $request->specialization);
+//                     } else {
+//                         // Clear specialization if empty
+//                         $user->specialization = null;
+//                     }
                     
-                    $user->portfolio_website = $request->portfolio_website;
-                }
+//                     $user->portfolio_website = $request->portfolio_website;
+//                 }
 
-                // Common fields
-                $user->visibility_control = $request->visibility_control ?? 'public';
-                $user->phone = $request->phone;
+//                 // Common fields
+//                 $user->visibility_control = $request->visibility_control ?? 'public';
+//                 $user->phone = $request->phone;
 
-                // Handle area of interests (integer[] array column)
-                if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
-                    // Get first job title for headline
-                    $firstJobTitleId = $request->area_of_interest_ids[0];
-                    $jobTitle = \App\JobTitle::find($firstJobTitleId);
-                    $user->headline = $jobTitle ? $jobTitle->job_title : $request->headline;
+//                 // Handle area of interests (integer[] array column)
+//                 if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
+//                     // Get first job title for headline
+//                     $firstJobTitleId = $request->area_of_interest_ids[0];
+//                     $jobTitle = \App\JobTitle::find($firstJobTitleId);
+//                     $user->headline = $jobTitle ? $jobTitle->job_title : $request->headline;
                     
-                    // For PostgreSQL integer[] column, use array literal
-                    $arrayLiteral = '{' . implode(',', array_map('intval', $request->area_of_interest_ids)) . '}';
-                    $user->area_of_interest_id = DB::raw("'" . $arrayLiteral . "'");
-                } else {
-                    $user->headline = $request->headline;
-                    // Clear area of interests if empty
-                    $user->area_of_interest_id = DB::raw("'{}'");
-                }
+//                     // For PostgreSQL integer[] column, use array literal
+//                     $arrayLiteral = '{' . implode(',', array_map('intval', $request->area_of_interest_ids)) . '}';
+//                     $user->area_of_interest_id = DB::raw("'" . $arrayLiteral . "'");
+//                 } else {
+//                     $user->headline = $request->headline;
+//                     // Clear area of interests if empty
+//                     $user->area_of_interest_id = DB::raw("'{}'");
+//                 }
                 
-                $user->save();
-                DB::commit();
+//                 $user->save();
+//                 DB::commit();
 
-                // Get area of interest names for response
-                $areaOfInterests = [];
-                if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
-                    $jobTitles = \App\JobTitle::whereIn('id', $request->area_of_interest_ids)
-                        ->where('is_active', 1)
-                        ->get(['id', 'job_title']);
-                    $areaOfInterests = $jobTitles->map(function($jobTitle) {
-                        return [
-                            'id' => $jobTitle->id,
-                            'name' => $jobTitle->job_title
-                        ];
-                    })->toArray();
-                }
+//                 // Get area of interest names for response
+//                 $areaOfInterests = [];
+//                 if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
+//                     $jobTitles = \App\JobTitle::whereIn('id', $request->area_of_interest_ids)
+//                         ->where('is_active', 1)
+//                         ->get(['id', 'job_title']);
+//                     $areaOfInterests = $jobTitles->map(function($jobTitle) {
+//                         return [
+//                             'id' => $jobTitle->id,
+//                             'name' => $jobTitle->job_title
+//                         ];
+//                     })->toArray();
+//                 }
 
-                // Get specialization names for response
-                $specializations = [];
-                if (!empty($request->specialization) && is_array($request->specialization) && 
-                    ($user->usertype == 'professional' || $user->usertype == 'student')) {
+//                 // Get specialization names for response
+//                 $specializations = [];
+//                 if (!empty($request->specialization) && is_array($request->specialization) && 
+//                     ($user->usertype == 'professional' || $user->usertype == 'student')) {
                     
-                    $jobSkills = \App\JobSkill::whereIn('id', $request->specialization)
-                        ->where('is_active', 1)
-                        ->get(['id', 'job_skill']);
+//                     $jobSkills = \App\JobSkill::whereIn('id', $request->specialization)
+//                         ->where('is_active', 1)
+//                         ->get(['id', 'job_skill']);
                     
-                    $specializations = $jobSkills->map(function($skill) {
-                        return [
-                            'id' => $skill->id,
-                            'name' => $skill->job_skill
-                        ];
-                    })->toArray();
-                }
+//                     $specializations = $jobSkills->map(function($skill) {
+//                         return [
+//                             'id' => $skill->id,
+//                             'name' => $skill->job_skill
+//                         ];
+//                     })->toArray();
+//                 }
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Profile completed successfully',
-                    'data' => [
-                        'user' => [
-                            'id' => $user->id,
-                            'name' => $user->getName(),
-                            'email' => $user->email,
-                            'unique_id' => $user->unique_id,
-                            'usertype' => $user->usertype,
-                            'visibility_control' => $user->visibility_control,
-                            'college_name' => $user->college_name,
-                            'school_name' => $user->school_name,
-                            'degree' => $user->degree,
-                            'course_duration' => $user->course_duration,
-                            'headline' => $user->headline,
-                            'phone' => $user->phone,
-                            'portfolio_website' => $user->portfolio_website,
-                            'area_of_interests' => $areaOfInterests,
-                            'specializations' => $specializations,
-                            'profile_completed' => true,
-                        ]
-                    ]
-                ]);
-            } catch (Exception $e) {
-                DB::rollBack();
-                throw $e;
-            }
-        } catch (Exception $e) {
+//                 return response()->json([
+//                     'success' => true,
+//                     'message' => 'Profile completed successfully',
+//                     'data' => [
+//                         'user' => [
+//                             'id' => $user->id,
+//                             'name' => $user->getName(),
+//                             'email' => $user->email,
+//                             'unique_id' => $user->unique_id,
+//                             'usertype' => $user->usertype,
+//                             'visibility_control' => $user->visibility_control,
+//                             'college_name' => $user->college_name,
+//                             'school_name' => $user->school_name,
+//                             'degree' => $user->degree,
+//                             'course_duration' => $user->course_duration,
+//                             'headline' => $user->headline,
+//                             'phone' => $user->phone,
+//                             'portfolio_website' => $user->portfolio_website,
+//                             'area_of_interests' => $areaOfInterests,
+//                             'specializations' => $specializations,
+//                             'profile_completed' => true,
+//                         ]
+//                     ]
+//                 ]);
+//             } catch (Exception $e) {
+//                 DB::rollBack();
+//                 throw $e;
+//             }
+//         } catch (Exception $e) {
+//             return response()->json([
+//                 'success' => false,
+//                 'message' => 'Profile completion failed',
+//                 'errors' => (object)[
+//                     'server' => 'An error occurred: ' . $e->getMessage()
+//                 ]
+//             ], 500);
+//         }
+//     }
+
+
+public function completeUserProfile(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        if (!$user || $user instanceof \App\Company) {
             return response()->json([
                 'success' => false,
-                'message' => 'Profile completion failed',
-                'errors' => (object)[
-                    'server' => 'An error occurred: ' . $e->getMessage()
-                ]
-            ], 500);
+                'message' => 'Invalid user type or not authenticated'
+            ], 400);
         }
-    }
 
+        $validator = Validator::make($request->all(), [
+            'full_name' => 'required|string|max:100',
+            'college_name' => 'nullable|string|max:255',
+            'school_name' => 'nullable|string|max:255',
+            'degree' => 'nullable|string|max:255',
+            'course_duration' => 'nullable|string|max:100',
+            'specialization' => 'nullable|array',
+            'specialization.*' => 'exists:job_skills,id',
+            'portfolio_website' => 'nullable|url|max:255',
+            'area_of_interest_ids' => 'nullable|array',
+            'area_of_interest_ids.*' => 'exists:job_titles,id',
+            'visibility_control' => 'sometimes|in:public,private',
+            'phone' => 'nullable|string|max:20',
+            'headline' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            $errors = [];
+            foreach ($validator->errors()->toArray() as $field => $messages) {
+                $errors[$field] = $messages[0];
+            }
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => (object)$errors
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Update user basic info
+            $user->first_name = $request->full_name;
+        
+            // Update other fields
+            $user->college_name = $request->college_name;
+            $user->school_name = $request->school_name;
+            $user->degree = $request->degree;
+            $user->course_duration = $request->course_duration;
+            
+            // Professional-specific fields
+            if ($user->usertype == 'professional' || $user->usertype == 'student') {
+                // Handle specialization array - store as comma-separated string
+                if (!empty($request->specialization) && is_array($request->specialization)) {
+                    $user->specialization = implode(',', $request->specialization);
+                } else {
+                    $user->specialization = null;
+                }
+                
+                $user->portfolio_website = $request->portfolio_website;
+            }
+
+            // Common fields
+            $user->visibility_control = $request->visibility_control ?? 'public';
+            $user->phone = $request->phone;
+
+            // Handle area of interests - Laravel will handle the array conversion automatically
+            if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
+                // Get first job title for headline
+                $firstJobTitleId = $request->area_of_interest_ids[0];
+                $jobTitle = \App\JobTitle::find($firstJobTitleId);
+                $user->headline = $jobTitle ? $jobTitle->job_title : $request->headline;
+                
+                // Laravel casts will handle the array conversion
+                $user->area_of_interest_id = $request->area_of_interest_ids;
+            } else {
+                $user->headline = $request->headline;
+                $user->area_of_interest_id = [];
+            }
+            
+            $user->save();
+            DB::commit();
+
+            // Get area of interest names for response
+            $areaOfInterests = [];
+            if (!empty($request->area_of_interest_ids) && is_array($request->area_of_interest_ids)) {
+                $jobTitles = \App\JobTitle::whereIn('id', $request->area_of_interest_ids)
+                    ->where('is_active', 1)
+                    ->get(['id', 'job_title']);
+                $areaOfInterests = $jobTitles->map(function($jobTitle) {
+                    return [
+                        'id' => $jobTitle->id,
+                        'name' => $jobTitle->job_title
+                    ];
+                })->toArray();
+            }
+
+            // Get specialization names for response
+            $specializations = [];
+            if (!empty($request->specialization) && is_array($request->specialization) && 
+                ($user->usertype == 'professional' || $user->usertype == 'student')) {
+                
+                $jobSkills = \App\JobSkill::whereIn('id', $request->specialization)
+                    ->where('is_active', 1)
+                    ->get(['id', 'job_skill']);
+                
+                $specializations = $jobSkills->map(function($skill) {
+                    return [
+                        'id' => $skill->id,
+                        'name' => $skill->job_skill
+                    ];
+                })->toArray();
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile completed successfully',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->getName(),
+                        'email' => $user->email,
+                        'unique_id' => $user->unique_id,
+                        'usertype' => $user->usertype,
+                        'visibility_control' => $user->visibility_control,
+                        'college_name' => $user->college_name,
+                        'school_name' => $user->school_name,
+                        'degree' => $user->degree,
+                        'course_duration' => $user->course_duration,
+                        'headline' => $user->headline,
+                        'phone' => $user->phone,
+                        'portfolio_website' => $user->portfolio_website,
+                        'area_of_interests' => $areaOfInterests,
+                        'specializations' => $specializations,
+                        'profile_completed' => true,
+                    ]
+                ]
+            ]);
+        } catch (Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    } catch (Exception $e) {
+        \Log::error('Profile completion failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Profile completion failed',
+            'errors' => (object)[
+                'server' => 'An error occurred while updating your profile. Please try again.'
+            ]
+        ], 500);
+    }
+}
     public function completeCompanyProfile(Request $request)
     {
         try {
