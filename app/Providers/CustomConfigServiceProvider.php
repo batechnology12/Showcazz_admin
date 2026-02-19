@@ -34,6 +34,11 @@ class CustomConfigServiceProvider extends ServiceProvider
 
     {
 
+
+
+$settings = SiteSetting::find(1272);
+
+    
         if ($settings = SiteSetting::findOrFail(1272)) {
 
 
@@ -239,6 +244,8 @@ class CustomConfigServiceProvider extends ServiceProvider
             }
 
         }
+        
+      
 
     }
 

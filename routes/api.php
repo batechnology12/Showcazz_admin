@@ -2,21 +2,29 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\RegisterController;
-use App\Http\Controllers\API\PostTypeController;
-use App\Http\Controllers\API\CategoryController;
-use App\Http\Controllers\API\SubcategoryController;
-use App\Http\Controllers\API\CommonController;
-use App\Http\Controllers\API\ForgotPasswordController;
-use App\Http\Controllers\API\UniversalConnectionController;
-use App\Http\Controllers\API\PostController;
-use App\Http\Controllers\API\PostCommentController;
+use App\Http\Controllers\Api\PostTypeController;
+use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\SubcategoryController;
+use App\Http\Controllers\Api\CommonController;
+use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\UniversalConnectionController;
+use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\StaticPageController;
 
 // Public routes
 Route::post('/register', [RegisterController::class, 'register']);
 Route::post('/login', [RegisterController::class, 'login']);
 Route::get('/areaOfIntrest', [CommonController::class, 'index']);
 Route::get('/skills', [CommonController::class, 'skills']);
+
+
+Route::get('/terms', [StaticPageController::class, 'getTerms']);
+    
+    // Get privacy policy
+Route::get('/privacy', [StaticPageController::class, 'getPrivacy']);
 
 Route::prefix('post-types')->group(function () {
     Route::get('/', [PostTypeController::class, 'index']);
@@ -48,9 +56,16 @@ Route::prefix('password')->group(function () {
 // Protected routes (require Sanctum authentication)
 Route::middleware('auth:sanctum')->group(function () {
 
+    Route::get('/dashboard', [DashboardController::class, 'getDashboard']);
     //auth
     Route::post('/logout', [RegisterController::class, 'logout']);
     Route::get('/profile', [RegisterController::class, 'profile']);
+    Route::get('/profileAlldetails', [RegisterController::class, 'profileAlldetails']);
+    
+    
+    Route::get('/profile/edit', [RegisterController::class, 'getEditProfileData']);
+    Route::post('/profile/update', [RegisterController::class, 'updateProfile']);
+    
     Route::post('/update-profile-picture', [RegisterController::class, 'updateProfilePicture']);
     Route::post('/complete-user-profile', [RegisterController::class, 'completeUserProfile']);
     Route::post('/complete-company-profile', [RegisterController::class, 'completeCompanyProfile']);
@@ -61,8 +76,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/mutual-connections', [UniversalConnectionController::class, 'getMutualConnections']);
     Route::post('/connection-action', [UniversalConnectionController::class, 'handleConnection']);
     Route::get('/connections', [UniversalConnectionController::class, 'getAllConnections']);
+    Route::get('/getAllConnections_with_profile', [UniversalConnectionController::class, 'getAllConnections_with_profile']);
+    
     Route::get('/connection-status', [UniversalConnectionController::class, 'checkStatus']);
     Route::get('/pending-requests', [UniversalConnectionController::class, 'getPendingRequests']);
+    
+    Route::get('/block-list', [UniversalConnectionController::class, 'getBlockList']);
+    Route::delete('/block-list/{id}', [UniversalConnectionController::class, 'unblockFromList']);
 
     //post
     Route::post('/posts', [PostController::class, 'createPost']);
@@ -86,6 +106,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/{id}/comments', [PostCommentController::class, 'addComment']); 
     Route::put('/comments/{id}', [PostCommentController::class, 'updateComment']);
     Route::delete('/comments/{id}', [PostCommentController::class, 'deleteComment']);
+    
+    
+    //rePost
+    Route::post('/posts/{id}/repost', [PostController::class, 'repostPost']);
+    Route::post('/posts/{id}/getPostLikers', [PostController::class, 'getPostLikers']);
+    
+    
+    // Route::get('/reposts/{id}', [PostController::class, 'getRepost']);
+    // Route::get('/posts/{postId}/reposts', [PostController::class, 'getPostReposts']);
+    // Route::get('/user/reposts', [PostController::class, 'getUserReposts']);
+    // Route::delete('/reposts/{id}', [PostController::class, 'deleteRepost']);
 
     // Comment likes
     Route::post('/comments/{id}/like', [PostCommentController::class, 'toggleLike']);
