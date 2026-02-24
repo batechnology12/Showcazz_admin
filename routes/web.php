@@ -30,6 +30,9 @@ Route::get('jobs-autocomplete', function (\Illuminate\Http\Request $request) {
 /* * ******** IndexController ************ */
 Route::get('/', 'IndexController@index')->name('index');
 
+Route::get('/phpinfo', function () {
+    phpinfo();
+});
 
 Route::get('/check-time', 'IndexController@checkTime')->name('check-time');
 Route::post('set-locale', 'IndexController@setLocale')->name('set.locale');

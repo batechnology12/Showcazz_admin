@@ -16,12 +16,50 @@ use Illuminate\Support\Facades\DB;
 class UniversalConnectionController extends Controller
 {
     /**
+     * Helper: Get enriched user data (with company override if usertype is 'company')
+     */
+    private function getEnrichedUserData($user)
+    {
+        
+        
+       
+        $name = $user->first_name;
+        $headline = $user->headline;
+        $image = $user->image 
+            ? asset('user_images/' . $user->image) 
+            : null;
+
+        // If user is company → fetch from companies table
+        if ($user->usertype === 'company') {
+            $company = Company::where('id', $user->id)->first();
+            if ($company) {
+                $name = $company->name ?? $name;
+                $headline = $company->description ?? $headline;
+                $image = $company->logo 
+                    ? asset('company_logo/' . $company->logo) 
+                    : $image;
+            }
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $name,
+            'email' => $user->email,
+            'usertype' => $user->usertype,
+            'headline' => $headline,
+            'image' => $image,
+        ];
+    }
+
+    /**
      * 1. Get Follow Suggestions (Auto-detect both Users & Companies)
      */
     public function getSuggestions(Request $request)
     {
         try {
             $currentUser = Auth::user();
+            
+           
             $perPage = $request->get('per_page', 20);
             $page = $request->get('page', 1);
 
@@ -49,22 +87,18 @@ class UniversalConnectionController extends Controller
                 ->where('id', '!=', $currentUser->id)
                 ->whereNotIn('id', $followingUserIds)
                 ->whereNotIn('id', $blockedUserIds)
-                ->select('id', 'name', 'email', 'usertype', 'headline', 'image', 'created_at')
+                ->select('id', 'first_name', 'email', 'usertype', 'headline', 'image', 'created_at')
                 ->inRandomOrder()
                 ->limit($userLimit)
                 ->get()
                 ->map(function ($user) use ($currentUser) {
-                    return [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'usertype' => $user->usertype,
-                        'headline' => $user->headline,
-                        'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                    $enrichedData = $this->getEnrichedUserData($user);
+                    
+                    return array_merge($enrichedData, [
                         'entity_type' => 'user',
                         'mutual_count' => $this->getMutualUserCount($currentUser->id, $user->id),
                         'connection_status' => $this->getUserConnectionStatus($currentUser->id, $user->id),
-                    ];
+                    ]);
                 });
             
             $suggestions = $suggestions->merge($userSuggestions);
@@ -153,18 +187,15 @@ class UniversalConnectionController extends Controller
                 if (!empty($mutualUserIds)) {
                     $mutualUsers = User::whereIn('id', $mutualUserIds)
                         ->where('is_active', 1)
-                        ->select('id', 'name', 'usertype', 'headline', 'image')
+                        ->select('id', 'first_name', 'usertype', 'headline', 'image')
                         ->get()
                         ->map(function ($user) use ($userId) {
-                            return [
-                                'id' => $user->id,
-                                'name' => $user->name,
-                                'usertype' => $user->usertype,
-                                'headline' => $user->headline,
-                                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                            $enrichedData = $this->getEnrichedUserData($user);
+                            
+                            return array_merge($enrichedData, [
                                 'entity_type' => 'user',
                                 'mutual_with' => $userId,
-                            ];
+                            ]);
                         });
                     
                     $mutualConnections = $mutualConnections->merge($mutualUsers);
@@ -188,22 +219,19 @@ class UniversalConnectionController extends Controller
                     $company = Company::find($companyId);
                     $mutualUsers = User::whereIn('id', $otherFollowers)
                         ->where('is_active', 1)
-                        ->select('id', 'name', 'usertype', 'headline', 'image')
+                        ->select('id', 'first_name', 'usertype', 'headline', 'image')
                         ->get()
                         ->map(function ($user) use ($company) {
-                            return [
-                                'id' => $user->id,
-                                'name' => $user->name,
-                                'usertype' => $user->usertype,
-                                'headline' => $user->headline,
-                                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                            $enrichedData = $this->getEnrichedUserData($user);
+                            
+                            return array_merge($enrichedData, [
                                 'entity_type' => 'user',
                                 'mutual_through' => [
                                     'type' => 'company',
                                     'company_id' => $company->id,
                                     'company_name' => $company->name,
                                 ],
-                            ];
+                            ]);
                         });
                     
                     $mutualConnections = $mutualConnections->merge($mutualUsers);
@@ -300,6 +328,8 @@ class UniversalConnectionController extends Controller
                     // Handle user connections
                     $targetUser = User::find($targetId);
                     
+                   
+                    
                     switch ($action) {
                         case 'follow':
                             $result = $this->followUser($currentUser->id, $targetId);
@@ -332,11 +362,12 @@ class UniversalConnectionController extends Controller
                             break;
                     }
                     
+                    $enrichedTargetData = $this->getEnrichedUserData($targetUser);
                     $result['target_details'] = [
-                        'id' => $targetUser->id,
-                        'name' => $targetUser->name,
-                        'usertype' => $targetUser->usertype,
-                        'image' => $targetUser->image ? asset('user_images/' . $targetUser->image) : null,
+                        'id' => $enrichedTargetData['id'],
+                        'name' => $enrichedTargetData['name'],
+                        'usertype' => $enrichedTargetData['usertype'],
+                        'image' => $enrichedTargetData['image'],
                     ];
                     
                 } else if ($entityType == 'company') {
@@ -415,6 +446,8 @@ class UniversalConnectionController extends Controller
      */
     public function getAllConnections(Request $request)
     {
+        
+       
         try {
             $currentUser = Auth::user();
             
@@ -423,37 +456,31 @@ class UniversalConnectionController extends Controller
             // Get following users
             $following = UserConnection::where('follower_id', $currentUser->id)
                 ->where('status', 'accepted')
-                ->with(['following:id,name,usertype,headline,image'])
+                ->with(['following:id,first_name,usertype,headline,image'])
                 ->get()
                 ->map(function ($conn) {
-                    return [
+                    $enrichedData = $this->getEnrichedUserData($conn->following);
+                    
+                    return array_merge($enrichedData, [
                         'entity_type' => 'user',
                         'connection_type' => 'following',
-                        'id' => $conn->following->id,
-                        'name' => $conn->following->name,
-                        'usertype' => $conn->following->usertype,
-                        'headline' => $conn->following->headline,
-                        'image' => $conn->following->image ? asset('user_images/' . $conn->following->image) : null,
                         'connected_at' => $conn->created_at,
-                    ];
+                    ]);
                 });
 
             // Get follower users
             $followers = UserConnection::where('following_id', $currentUser->id)
                 ->where('status', 'accepted')
-                ->with(['follower:id,name,usertype,headline,image'])
+                ->with(['follower:id,first_name,usertype,headline,image'])
                 ->get()
                 ->map(function ($conn) {
-                    return [
+                    $enrichedData = $this->getEnrichedUserData($conn->follower);
+                    
+                    return array_merge($enrichedData, [
                         'entity_type' => 'user',
                         'connection_type' => 'follower',
-                        'id' => $conn->follower->id,
-                        'name' => $conn->follower->name,
-                        'usertype' => $conn->follower->usertype,
-                        'headline' => $conn->follower->headline,
-                        'image' => $conn->follower->image ? asset('user_images/' . $conn->follower->image) : null,
                         'connected_at' => $conn->created_at,
-                    ];
+                    ]);
                 });
 
             // Get followed companies
@@ -468,6 +495,86 @@ class UniversalConnectionController extends Controller
                         'name' => $fav->company->name,
                         'slug' => $fav->company->slug,
                         'logo' => $fav->company->logo ? asset('company_logos/' . $fav->company->logo) : null,
+                        'description' => $fav->company->description,
+                        'followed_at' => $fav->created_at,
+                    ];
+                });
+
+            $connections = $connections->merge($followers)->merge($following)->merge($companies);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'All connections retrieved',
+                'data' => [
+                    'connections' => $connections->values(),
+                    'stats' => [
+                        'following_users' => $following->count(),
+                        'follower_users' => $followers->count(),
+                        'following_companies' => $companies->count(),
+                        'total' => $connections->count(),
+                    ]
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get connections',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+    
+    public function getAllConnections_with_profile(Request $request)
+    {
+        try {
+            $currentUser = Auth::user();
+            
+            $connections = collect();
+
+            // Get following users
+            $following = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'accepted')
+                ->with(['following:id,first_name,usertype,headline,image'])
+                ->get()
+                ->map(function ($conn) {
+                    $enrichedData = $this->getEnrichedUserData($conn->following);
+                    
+                    return array_merge($enrichedData, [
+                        'entity_type' => 'user',
+                        'connection_type' => 'following',
+                        'connected_at' => $conn->created_at,
+                    ]);
+                });
+
+            // Get follower users
+            $followers = UserConnection::where('following_id', $currentUser->id)
+                ->where('status', 'accepted')
+                ->with(['follower:id,first_name,usertype,headline,image'])
+                ->get()
+                ->map(function ($conn) {
+                    $enrichedData = $this->getEnrichedUserData($conn->follower);
+                    
+                    return array_merge($enrichedData, [
+                        'entity_type' => 'user',
+                        'connection_type' => 'follower',
+                        'connected_at' => $conn->created_at,
+                    ]);
+                });
+
+            // Get followed companies
+            $companies = FavouriteCompany::where('user_id', $currentUser->id)
+                ->with(['company:id,name,slug,logo,description'])
+                ->get()
+                ->map(function ($fav) {
+                    return [
+                        'entity_type' => 'company',
+                        'connection_type' => 'following',
+                        'id' => $fav->company->id,
+                        'name' => $fav->company->name,
+                        'slug' => $fav->company->slug,
+                        'logo' => $fav->company->logo ? asset('company_logos/' . $fav->company->logo) : null,
+                        'description' => $fav->company->description,
                         'followed_at' => $fav->created_at,
                     ];
                 });
@@ -614,48 +721,171 @@ class UniversalConnectionController extends Controller
     /**
      * 6. Get Pending Follow Requests
      */
-    public function getPendingRequests(Request $request)
-    {
-        try {
-            $currentUser = Auth::user();
+    // public function getPendingRequests(Request $request)
+    // {
+    //     try {
+    //         $currentUser = Auth::user();
+    
+    //         $pendingRequests = UserConnection::where('following_id', $currentUser->id)
+    //             ->where('status', 'pending')
+    //             ->with(['follower:id,first_name,usertype,headline,image'])
+    //             ->get()
+    //             ->map(function ($connection) {
+    //                 $follower = $connection->follower;
+    //                 $enrichedData = $this->getEnrichedUserData($follower);
+    
+    //                 return [
+    //                     'id' => $connection->id,
+    //                     'entity_type' => $follower->usertype,
+    //                     'request_from' => [
+    //                         'id' => $enrichedData['id'],
+    //                         'name' => $enrichedData['name'],
+    //                         'usertype' => $enrichedData['usertype'],
+    //                         'headline' => $enrichedData['headline'],
+    //                         'image' => $enrichedData['image'],
+    //                     ],
+    //                     'requested_at' => $connection->created_at,
+    //                     'mutual_count' => $this->getMutualUserCount(
+    //                         $connection->following_id,
+    //                         $connection->follower_id
+    //                     ),
+    //                 ];
+    //             });
+    
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Pending requests retrieved',
+    //             'data' => [
+    //                 'pending_requests' => $pendingRequests,
+    //                 'count' => $pendingRequests->count(),
+    //             ]
+    //         ]);
+    
+    //     } catch (Exception $e) {
             
-            $pendingRequests = UserConnection::where('following_id', $currentUser->id)
-                ->where('status', 'pending')
-                ->with(['follower:id,name,usertype,headline,image'])
-                ->get()
-                ->map(function ($connection) {
-                    return [
-                        'id' => $connection->id,
-                        'entity_type' => 'user',
-                        'request_from' => [
-                            'id' => $connection->follower->id,
-                            'name' => $connection->follower->name,
-                            'usertype' => $connection->follower->usertype,
-                            'headline' => $connection->follower->headline,
-                            'image' => $connection->follower->image ? asset('user_images/' . $connection->follower->image) : null,
-                        ],
-                        'requested_at' => $connection->created_at,
-                        'mutual_count' => $this->getMutualUserCount($connection->following_id, $connection->follower_id),
-                    ];
-                });
+    //         dd([
+    //     'message' => $e->getMessage(),
+    //     'file' => $e->getFile(),
+    //     'line' => $e->getLine(),
+    //     'trace' => $e->getTraceAsString()
+    // ]);
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Failed to get pending requests',
+    //             'errors' => (object)['server' => 'An error occurred']
+    //         ], 500);
+    //     }
+    // }
+    
+    
+    /**
+ * 6. Get Pending Follow Requests (FIXED - Handles both Users & Companies)
+ */
+public function getPendingRequests(Request $request)
+{
+    try {
+        $currentUser = Auth::user();
+        
+        // Get all pending requests where current user is the target
+        $pendingRequests = UserConnection::where('following_id', $currentUser->id)
+            ->where('status', 'pending')
+            ->get();
+        
+        $formattedRequests = $pendingRequests->map(function ($connection) {
+            // Try to find as User first
+            $follower = User::find($connection->follower_id);
+            $entityType = 'user';
+            
+            // If not found in users, try companies
+            if (!$follower) {
+                $follower = Company::find($connection->follower_id);
+                $entityType = 'company';
+            }
+            
+            // If still not found, return null (will be filtered out)
+            if (!$follower) {
+                return null;
+            }
+            
+            // Get basic data based on entity type
+            if ($entityType === 'company') {
+                $name = $follower->name ?? 'Unknown Company';
+                $usertype = 'company';
+                $headline = $follower->description ?? null;
+                $image = $follower->logo ? asset('company_logos/' . $follower->logo) : null;
+                $slug = $follower->slug ?? null;
+            } else {
+                $firstName = $follower->first_name ?? '';
+                $lastName = $follower->last_name ?? '';
+                $name = trim($firstName . ' ' . $lastName);
+                $name = $name ?: ($follower->name ?? 'Unknown User');
+                $usertype = $follower->usertype ?? 'user';
+                $headline = $follower->headline ?? null;
+                $image = $follower->image ? asset('user_images/' . $follower->image) : null;
+                $slug = null;
+                
+                // If user is company type, get company details
+                if ($follower->usertype === 'company') {
+                    $company = Company::where('user_id', $follower->id)->first();
+                    if ($company) {
+                        $name = $company->name ?? $name;
+                        $headline = $company->description ?? $headline;
+                        $image = $company->logo ? asset('company_logos/' . $company->logo) : $image;
+                        $slug = $company->slug ?? null;
+                        $usertype = 'company';
+                        $entityType = 'company';
+                    }
+                }
+            }
+            
+            // Get mutual count only for users
+            $mutualCount = 0;
+            if ($entityType === 'user') {
+                $mutualCount = $this->getMutualUserCount(
+                    $connection->following_id,
+                    $connection->follower_id
+                );
+            }
+            
+            return [
+                'id' => $connection->id,
+                'entity_type' => $entityType,
+                'request_from' => [
+                    'id' => $follower->id,
+                    'name' => $name,
+                    'usertype' => $usertype,
+                    'headline' => $headline,
+                    'image' => $image,
+                    'slug' => $slug,
+                ],
+                'requested_at' => $connection->created_at,
+                'mutual_count' => $mutualCount,
+                'connection_status' => $connection->status,
+            ];
+        })->filter(); // Remove null entries
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pending requests retrieved',
-                'data' => [
-                    'pending_requests' => $pendingRequests,
-                    'count' => $pendingRequests->count(),
-                ]
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Pending requests retrieved successfully',
+            'data' => [
+                'pending_requests' => $formattedRequests->values(),
+                'count' => $formattedRequests->count(),
+                'total_pending' => $pendingRequests->count(),
+            ]
+        ]);
 
-        } catch (Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get pending requests',
-                'errors' => (object)['server' => 'An error occurred']
-            ], 500);
-        }
+    } catch (Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to get pending requests: ' . $e->getMessage(),
+            'errors' => (object)[
+                'server' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]
+        ], 500);
     }
+}
 
     // ============================================
     // HELPER METHODS
@@ -938,5 +1168,166 @@ class UniversalConnectionController extends Controller
             'unblocked_company_id' => $companyId,
             'action' => 'company_unblocked'
         ];
+    }
+    
+    
+    
+    /**
+     * 7. Get Block List - All blocked users and companies
+     */
+    public function getBlockList(Request $request)
+    {
+        try {
+            $currentUser = Auth::user();
+            $perPage = $request->get('per_page', 20);
+            $page = $request->get('page', 1);
+    
+            // Get all blocked users and companies from user_connections table
+            $blockedConnections = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+    
+            $blockedItems = [];
+    
+            foreach ($blockedConnections as $connection) {
+                $targetId = $connection->following_id;
+                
+                // Check if it's a user
+                $user = User::find($targetId);
+                if ($user) {
+                    // Get enriched user data
+                    $enrichedData = $this->getEnrichedUserData($user);
+                    
+                    $blockedItems[] = [
+                        'id' => $connection->id,
+                        'blocked_id' => $enrichedData['id'],
+                        'name' => $enrichedData['name'],
+                        'email' => $enrichedData['email'],
+                        'usertype' => $enrichedData['usertype'],
+                        'headline' => $enrichedData['headline'],
+                        'image' => $enrichedData['image'],
+                        'entity_type' => 'user',
+                        'blocked_at' => $connection->created_at,
+                        'blocked_at_formatted' => $connection->created_at->diffForHumans(),
+                        'reason' => $connection->reason ?? null,
+                    ];
+                    continue;
+                }
+    
+                // Check if it's a company
+                $company = Company::find($targetId);
+                if ($company) {
+                    $blockedItems[] = [
+                        'id' => $connection->id,
+                        'blocked_id' => $company->id,
+                        'name' => $company->name,
+                        'email' => $company->email,
+                        'usertype' => 'company',
+                        'headline' => $company->description,
+                        'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                        'slug' => $company->slug,
+                        'entity_type' => 'company',
+                        'blocked_at' => $connection->created_at,
+                        'blocked_at_formatted' => $connection->created_at->diffForHumans(),
+                        'reason' => $connection->reason ?? null,
+                    ];
+                }
+            }
+    
+            // Get total counts
+            $totalBlockedUsers = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->whereIn('following_id', function($query) {
+                    $query->select('id')->from('users');
+                })
+                ->count();
+    
+            $totalBlockedCompanies = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->whereIn('following_id', function($query) {
+                    $query->select('id')->from('companies');
+                })
+                ->count();
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Block list retrieved successfully',
+                'data' => [
+                    'blocked_items' => $blockedItems,
+                    'stats' => [
+                        'total_blocked' => $blockedConnections->total(),
+                        'total_users' => $totalBlockedUsers,
+                        'total_companies' => $totalBlockedCompanies,
+                    ],
+                    'pagination' => [
+                        'current_page' => $blockedConnections->currentPage(),
+                        'per_page' => $blockedConnections->perPage(),
+                        'total' => $blockedConnections->total(),
+                        'last_page' => $blockedConnections->lastPage(),
+                        'from' => $blockedConnections->firstItem(),
+                        'to' => $blockedConnections->lastItem(),
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get block list: ' . $e->getMessage(),
+                'errors' => (object)[
+                    'server' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ], 500);
+        }
+    }
+    
+    /**
+     * 8. Unblock from list (convenience method)
+     */
+    public function unblockFromList($id)
+    {
+        try {
+            $currentUser = Auth::user();
+    
+            $connection = UserConnection::where('id', $id)
+                ->where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->first();
+    
+            if (!$connection) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Blocked item not found'
+                ], 404);
+            }
+    
+            $targetId = $connection->following_id;
+            $entityType = $this->detectEntityType($targetId);
+            
+            $connection->delete();
+    
+            $message = $entityType === 'company' 
+                ? 'Company unblocked successfully' 
+                : 'User unblocked successfully';
+    
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'unblocked_id' => $targetId,
+                    'entity_type' => $entityType
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to unblock: ' . $e->getMessage(),
+                'errors' => (object)['server' => $e->getMessage()]
+            ], 500);
+        }
     }
 }

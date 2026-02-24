@@ -39,6 +39,7 @@ class AdminController extends Controller
      */
     public function indexAdminUsers()
     {
+       
         return view('admin.admin.index');
     }
 

@@ -13,8 +13,7 @@
             </div>
             <!-- END PAGE BAR -->
             <!-- BEGIN PAGE TITLE-->
-            <h3 class="page-title"> {{ $siteSetting->site_name }} Admin Panel <small>{{ $siteSetting->site_name }} Admin
-                    Panel</small> </h3>
+           
             <!-- END PAGE TITLE-->
             <!-- END PAGE HEADER-->
             {{-- <div class="row">

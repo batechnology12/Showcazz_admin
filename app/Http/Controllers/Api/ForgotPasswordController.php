@@ -167,15 +167,17 @@ class ForgotPasswordController extends Controller
     /**
      * 3. Reset Password API
      */
-    public function resetPassword(Request $request)
+     
+     public function resetPassword(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
-                'password' => 'required|string|min:8|confirmed',
+                'current_password' => 'required|string',
+                'password' => 'required|string|min:8|confirmed|different:current_password',
                 'password_confirmation' => 'required|string|min:8',
             ]);
-
+    
             if ($validator->fails()) {
                 $errors = [];
                 foreach ($validator->errors()->toArray() as $field => $messages) {
@@ -188,15 +190,15 @@ class ForgotPasswordController extends Controller
                     'errors' => (object)$errors
                 ], 422);
             }
-
+    
             $email = $request->email;
-            $password = $request->password;
-
-           
+            $currentPassword = $request->current_password;
+            $newPassword = $request->password;
+    
             // Find user/company
             $user = User::where('email', $email)->first();
             $company = Company::where('email', $email)->first();
-
+    
             if (!$user && !$company) {
                 return response()->json([
                     'success' => false,
@@ -206,20 +208,41 @@ class ForgotPasswordController extends Controller
                     ]
                 ], 404);
             }
-
+    
+            // Validate current password
+            if ($user) {
+                if (!Hash::check($currentPassword, $user->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Current password is incorrect',
+                        'errors' => (object)[
+                            'current_password' => 'Current password is incorrect'
+                        ]
+                    ], 401);
+                }
+            } else {
+                if (!Hash::check($currentPassword, $company->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Current password is incorrect',
+                        'errors' => (object)[
+                            'current_password' => 'Current password is incorrect'
+                        ]
+                    ], 401);
+                }
+            }
+    
             // Update password
             if ($user) {
-                $user->password = Hash::make($password);
+                $user->password = Hash::make($newPassword);
                 $user->save();
                 $userType = 'user';
             } else {
-                $company->password = Hash::make($password);
+                $company->password = Hash::make($newPassword);
                 $company->save();
                 $userType = 'company';
             }
-
-           
-
+    
             return response()->json([
                 'success' => true,
                 'message' => 'Password reset successfully',
@@ -229,7 +252,7 @@ class ForgotPasswordController extends Controller
                     'reset' => true
                 ]
             ]);
-
+    
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
@@ -240,4 +263,77 @@ class ForgotPasswordController extends Controller
             ], 500);
         }
     }
+    // public function resetPassword(Request $request)
+    // {
+    //     try {
+    //         $validator = Validator::make($request->all(), [
+    //             'email' => 'required|email',
+    //             'password' => 'required|string|min:8|confirmed',
+    //             'password_confirmation' => 'required|string|min:8',
+    //         ]);
+
+    //         if ($validator->fails()) {
+    //             $errors = [];
+    //             foreach ($validator->errors()->toArray() as $field => $messages) {
+    //                 $errors[$field] = $messages[0];
+    //             }
+                
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Validation failed',
+    //                 'errors' => (object)$errors
+    //             ], 422);
+    //         }
+
+    //         $email = $request->email;
+    //         $password = $request->password;
+
+           
+    //         // Find user/company
+    //         $user = User::where('email', $email)->first();
+    //         $company = Company::where('email', $email)->first();
+
+    //         if (!$user && !$company) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'User not found',
+    //                 'errors' => (object)[
+    //                     'email' => 'User not found'
+    //                 ]
+    //             ], 404);
+    //         }
+
+    //         // Update password
+    //         if ($user) {
+    //             $user->password = Hash::make($password);
+    //             $user->save();
+    //             $userType = 'user';
+    //         } else {
+    //             $company->password = Hash::make($password);
+    //             $company->save();
+    //             $userType = 'company';
+    //         }
+
+           
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Password reset successfully',
+    //             'data' => [
+    //                 'email' => $email,
+    //                 'user_type' => $userType,
+    //                 'reset' => true
+    //             ]
+    //         ]);
+
+    //     } catch (Exception $e) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Failed to reset password',
+    //             'errors' => (object)[
+    //                 'server' => 'An error occurred'
+    //             ]
+    //         ], 500);
+    //     }
+    // }
 }

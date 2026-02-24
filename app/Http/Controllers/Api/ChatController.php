@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\User;
+use App\Company;
 use App\Post;
 use App\Job;
 use App\UserMessage;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -43,13 +45,144 @@ class ChatController extends Controller
     }
 
     /**
-     * Initialize chat from post (called from post page)
+     * Helper function to get entity data from either users or companies table
+     */
+    private function getEntityData($id)
+    {
+        if (!$id) {
+            return null;
+        }
+
+        // FIRST: Check if this ID exists in companies table (direct company)
+        $company = Company::find($id);
+        if ($company) {
+            return [
+                'id' => $company->id,
+                'name' => $company->name,
+                'usertype' => 'company',
+                'email' => $company->email ?? null,
+                'phone' => $company->phone ?? null,
+                'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                'entity_type' => 'company',
+                'original_id' => $company->id
+            ];
+        }
+
+        // SECOND: Check users table
+        $user = User::find($id);
+        if ($user) {
+            // Check if this user is actually a company (usertype = company)
+            if ($user->usertype === 'company') {
+                $companyRecord = Company::where('user_id', $user->id)->first();
+                if ($companyRecord) {
+                    return [
+                        'id' => $companyRecord->id,
+                        'name' => $companyRecord->name,
+                        'usertype' => 'company',
+                        'email' => $companyRecord->email ?? $user->email,
+                        'phone' => $companyRecord->phone ?? $user->phone,
+                        'image' => $companyRecord->logo ? asset('company_logos/' . $companyRecord->logo) : null,
+                        'entity_type' => 'company',
+                        'original_id' => $companyRecord->id
+                    ];
+                }
+            }
+            
+            // Regular user
+            $firstName = $user->first_name ?? '';
+            $lastName = $user->last_name ?? '';
+            $name = trim($firstName . ' ' . $lastName);
+            $name = $name ?: ($user->name ?? 'Unknown User');
+            
+            return [
+                'id' => $user->id,
+                'name' => $name,
+                'usertype' => $user->usertype ?? 'user',
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'entity_type' => 'user',
+                'original_id' => $user->id
+            ];
+        }
+
+        // Not found in either table
+        return [
+            'id' => $id,
+            'name' => 'Unknown User',
+            'usertype' => 'unknown',
+            'email' => null,
+            'phone' => null,
+            'image' => null,
+            'entity_type' => 'unknown',
+            'original_id' => null
+        ];
+    }
+
+    /**
+     * Helper function to get user by ID (checks both tables)
+     */
+    private function findUserById($id)
+    {
+        if (!$id) {
+            return null;
+        }
+
+        // Check companies table first
+        $company = Company::find($id);
+        if ($company) {
+            return $company;
+        }
+
+        // Then check users table
+        return User::find($id);
+    }
+
+    /**
+     * Helper function to get user email by ID
+     */
+    private function getUserEmail($id)
+    {
+        $entity = $this->getEntityData($id);
+        return $entity ? $entity['email'] : null;
+    }
+
+    /**
+     * Helper function to get user name by ID
+     */
+    private function getUserName($id)
+    {
+        $entity = $this->getEntityData($id);
+        return $entity ? $entity['name'] : 'Unknown User';
+    }
+
+    /**
+     * Helper function to get user phone by ID
+     */
+    private function getUserPhone($id)
+    {
+        $entity = $this->getEntityData($id);
+        return $entity ? $entity['phone'] : null;
+    }
+
+    /**
+     * Initialize chat from post
      */
     public function initializeChatFromPost(Request $request, $postId)
     {
         try {
             $user = Auth::user();
             
+            // Get current user entity data
+            $currentUserData = $this->getEntityData($user->id);
+            if (!$currentUserData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'errors' => (object)['user' => 'User not found']
+                ], 404);
+            }
+
             $validator = Validator::make($request->all(), [
                 'chat_type' => 'required|in:job_application,worth_discussing',
                 'worth_discussing_point_id' => 'required_if:chat_type,worth_discussing|exists:worth_discussing_points,id',
@@ -61,7 +194,7 @@ class ChatController extends Controller
                 foreach ($validator->errors()->toArray() as $field => $messages) {
                     $errors[$field] = $messages[0];
                 }
-                
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
@@ -69,9 +202,9 @@ class ChatController extends Controller
                 ], 422);
             }
 
-            // Get the post
+            // Get Post
             $post = Post::with('user')->find($postId);
-            
+
             if (!$post) {
                 return response()->json([
                     'success' => false,
@@ -80,7 +213,7 @@ class ChatController extends Controller
                 ], 404);
             }
 
-            // Check if post is active and published
+            // Validate post status
             if (!$post->is_active || !$post->is_published) {
                 return response()->json([
                     'success' => false,
@@ -89,16 +222,16 @@ class ChatController extends Controller
                 ], 400);
             }
 
-            // Prevent self-messaging (can't chat with yourself about your own post)
+            // Prevent self chat
             if ($user->id == $post->user_id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot initiate chat about your own post',
-                    'errors' => (object)['user' => 'Cannot chat with yourself about your own post']
+                    'errors' => (object)['user' => 'Cannot chat with yourself']
                 ], 400);
             }
 
-            // For job application, verify it's a job post
+            // Validate Job Post
             if ($request->chat_type == 'job_application' && !$post->is_job_post) {
                 return response()->json([
                     'success' => false,
@@ -107,121 +240,147 @@ class ChatController extends Controller
                 ], 400);
             }
 
-            // For worth discussing, verify it's NOT a job post and has appropriate category
+            // Validate Worth Discussing
             if ($request->chat_type == 'worth_discussing') {
                 if ($post->is_job_post) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Worth discussing is not available for job posts',
-                        'errors' => (object)['post' => 'Use job application for job posts']
+                        'message' => 'Worth discussing is not available for job posts'
                     ], 400);
                 }
-                
-                // Verify worth discussing point exists
+
                 $point = WorthDiscussingPoint::find($request->worth_discussing_point_id);
                 if (!$point) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Invalid discussion point',
-                        'errors' => (object)['worth_discussing_point_id' => 'Discussion point not found']
+                        'message' => 'Invalid discussion point'
                     ], 404);
                 }
             }
 
-            // Get chat type
+            // Get Chat Type
             $chatType = ChatType::where('slug', $request->chat_type)->first();
             if (!$chatType) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid chat type',
-                    'errors' => (object)['chat_type' => 'Chat type not found']
+                    'message' => 'Invalid chat type'
                 ], 404);
             }
 
-            // Get post author (receiver)
-            $receiver = $post->user;
+            // Get receiver data (post owner)
+            $receiverData = $this->getEntityData($post->user_id);
+            if (!$receiverData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Post owner not found',
+                    'errors' => (object)['receiver' => 'Post owner not found']
+                ], 404);
+            }
 
-            // Generate chat session ID
+            // Generate Session ID
             $sessionId = $this->generateChatSessionId(
                 $user->id,
-                $receiver->id,
+                $post->user_id,
                 $post->id,
                 $chatType->id
             );
 
             DB::beginTransaction();
 
-            try {
-                // Create or update chat session
-                $chatSession = ChatSession::updateOrCreate(
-                    [
-                        'id' => $sessionId
-                    ],
-                    [
-                        'user1_id' => min($user->id, $receiver->id),
-                        'user2_id' => max($user->id, $receiver->id),
-                        'post_id' => $post->id,
-                        'chat_type_id' => $chatType->id,
-                        'worth_discussing_point_id' => $request->worth_discussing_point_id ?? null,
-                        'last_message_at' => now(),
-                        'last_message' => Str::limit($request->initial_message, 100),
-                        'unread_count' => DB::raw('unread_count + 1'),
-                        'is_active' => true
-                    ]
-                );
+            // ==============================
+            // CREATE / UPDATE CHAT SESSION
+            // ==============================
 
-                // Generate subject based on chat type and post
-                $subject = $this->generateChatSubject($request->chat_type, $post, $request->worth_discussing_point_id);
+            $chatSession = ChatSession::find($sessionId);
 
-                // Create the initial message
-                $message = UserMessage::create([
-                    'listing_id' => $post->id,
-                    'listing_title' => $post->title,
-                    'from_id' => $user->id,
-                    'to_id' => $receiver->id,
-                    'to_email' => $receiver->email,
-                    'to_name' => $receiver->name,
-                    'from_name' => $user->name,
-                    'from_email' => $user->email,
-                    'from_phone' => $user->phone,
-                    'message_txt' => $request->initial_message,
-                    'subject' => $subject,
+            if (!$chatSession) {
+                $chatSession = ChatSession::create([
+                    'id' => $sessionId,
+                    'user1_id' => min($user->id, $post->user_id),
+                    'user2_id' => max($user->id, $post->user_id),
+                    'post_id' => $post->id,
                     'chat_type_id' => $chatType->id,
-                    'chat_session_id' => $sessionId,
                     'worth_discussing_point_id' => $request->worth_discussing_point_id ?? null,
-                    'status' => 'active',
-                    'is_read' => false,
-                    'message_type' => 'text'
+                    'last_message_at' => now(),
+                    'last_message' => Str::limit($request->initial_message, 100),
+                    'unread_count' => 1,
+                    'is_active' => true
+                ]);
+            } else {
+                $chatSession->update([
+                    'last_message_at' => now(),
+                    'last_message' => Str::limit($request->initial_message, 100),
+                    'worth_discussing_point_id' => $request->worth_discussing_point_id ?? null,
                 ]);
 
-                DB::commit();
-
-                // Load relationships
-                $message->load(['sender', 'receiver', 'post', 'chatType', 'worthDiscussingPoint']);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $request->chat_type == 'job_application' 
-                        ? 'Job application sent successfully' 
-                        : 'Discussion initiated successfully',
-                    'data' => [
-                        'message' => $this->formatMessageResponse($message),
-                        'session_id' => $sessionId,
-                        'chat_type' => $chatType->slug,
-                        'post' => [
-                            'id' => $post->id,
-                            'title' => $post->title,
-                            'is_job_post' => $post->is_job_post
-                        ]
-                    ]
-                ], 201);
-
-            } catch (Exception $e) {
-                DB::rollBack();
-                throw $e;
+                $chatSession->increment('unread_count');
             }
 
+            // ==============================
+            // CREATE MESSAGE
+            // ==============================
+
+            $subject = $this->generateChatSubject(
+                $request->chat_type,
+                $post,
+                $request->worth_discussing_point_id
+            );
+
+            $message = UserMessage::create([
+                'listing_id' => $post->id,
+                'listing_title' => $post->title,
+                'from_id' => $user->id,
+                'to_id' => $post->user_id,
+                'to_email' => $receiverData['email'],
+                'to_name' => $receiverData['name'],
+                'from_name' => $currentUserData['name'],
+                'from_email' => $currentUserData['email'],
+                'from_phone' => $currentUserData['phone'],
+                'message_txt' => $request->initial_message,
+                'subject' => $subject,
+                'chat_type_id' => $chatType->id,
+                'chat_session_id' => $sessionId,
+                'worth_discussing_point_id' => $request->worth_discussing_point_id ?? null,
+                'status' => 'active',
+                'is_read' => false,
+                'message_type' => 'text'
+            ]);
+
+            DB::commit();
+
+            $message->load([
+                'sender',
+                'receiver',
+                'post',
+                'chatType',
+                'worthDiscussingPoint'
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $request->chat_type == 'job_application'
+                    ? 'Job application sent successfully'
+                    : 'Discussion initiated successfully',
+                'data' => [
+                    'message' => $this->formatMessageResponse($message),
+                    'session_id' => $sessionId,
+                    'chat_type' => $chatType->slug,
+                    'post' => [
+                        'id' => $post->id,
+                        'title' => $post->title,
+                        'is_job_post' => $post->is_job_post
+                    ]
+                ]
+            ], 201);
+
         } catch (Exception $e) {
+            DB::rollBack();
+
+            Log::error('Chat initialization failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to initialize chat',
@@ -238,8 +397,18 @@ class ChatController extends Controller
         try {
             $user = Auth::user();
             
+            // Get current user entity data
+            $currentUserData = $this->getEntityData($user->id);
+            if (!$currentUserData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'errors' => (object)['user' => 'User not found']
+                ], 404);
+            }
+
             $validator = Validator::make($request->all(), [
-                'to_user_id' => 'required|exists:users,id',
+                'to_user_id' => 'required',
                 'initial_message' => 'required|string|min:1|max:1000',
                 'subject' => 'nullable|string|max:200'
             ]);
@@ -257,9 +426,6 @@ class ChatController extends Controller
                 ], 422);
             }
 
-
-            
-
             // Prevent self-messaging
             if ($user->id == $request->to_user_id) {
                 return response()->json([
@@ -267,6 +433,16 @@ class ChatController extends Controller
                     'message' => 'Cannot send message to yourself',
                     'errors' => (object)['to_user_id' => 'Cannot send message to yourself']
                 ], 400);
+            }
+
+            // Get receiver data (checks both tables)
+            $receiverData = $this->getEntityData($request->to_user_id);
+            if (!$receiverData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Receiver not found',
+                    'errors' => (object)['to_user_id' => 'User not found']
+                ], 404);
             }
 
             // Get chat type (general)
@@ -279,16 +455,10 @@ class ChatController extends Controller
                 ], 404);
             }
 
-
-           
-
-            // Get receiver
-            $receiver = User::find($request->to_user_id);
- 
             // Generate chat session ID
             $sessionId = $this->generateChatSessionId(
                 $user->id,
-                $receiver->id,
+                $request->to_user_id,
                 null,
                 $chatType->id
             );
@@ -298,33 +468,33 @@ class ChatController extends Controller
             try {
                 // Create or update chat session
                 $chatSession = ChatSession::updateOrCreate(
+                    ['id' => $sessionId],
                     [
-                        'id' => $sessionId
-                    ],
-                    [
-                        'user1_id' => min($user->id, $receiver->id),
-                        'user2_id' => max($user->id, $receiver->id),
+                        'user1_id' => min($user->id, $request->to_user_id),
+                        'user2_id' => max($user->id, $request->to_user_id),
                         'post_id' => null,
                         'chat_type_id' => $chatType->id,
                         'worth_discussing_point_id' => null,
                         'last_message_at' => now(),
                         'last_message' => Str::limit($request->initial_message, 100),
-                        //'unread_count' => DB::raw('unread_count + 1'),
                         'is_active' => true
                     ]
                 );
+
+                // Increment unread count
+                $chatSession->increment('unread_count');
 
                 // Create the initial message
                 $message = UserMessage::create([
                     'listing_id' => null,
                     'listing_title' => null,
                     'from_id' => $user->id,
-                    'to_id' => $receiver->id,
-                    'to_email' => $receiver->email,
-                    'to_name' => $receiver->name,
-                    'from_name' => $user->name,
-                    'from_email' => $user->email,
-                    'from_phone' => $user->phone,
+                    'to_id' => $request->to_user_id,
+                    'to_email' => $receiverData['email'],
+                    'to_name' => $receiverData['name'],
+                    'from_name' => $currentUserData['name'],
+                    'from_email' => $currentUserData['email'],
+                    'from_phone' => $currentUserData['phone'],
                     'message_txt' => $request->initial_message,
                     'subject' => $request->subject ?? 'General Chat',
                     'chat_type_id' => $chatType->id,
@@ -356,8 +526,11 @@ class ChatController extends Controller
             }
 
         } catch (Exception $e) {
+            Log::error('General chat initialization failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to send message',
@@ -374,6 +547,16 @@ class ChatController extends Controller
         try {
             $user = Auth::user();
             
+            // Get current user entity data
+            $currentUserData = $this->getEntityData($user->id);
+            if (!$currentUserData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'errors' => (object)['user' => 'User not found']
+                ], 404);
+            }
+
             $validator = Validator::make($request->all(), [
                 'chat_session_id' => 'required|exists:chat_sessions,id',
                 'message' => 'required|string|min:1|max:5000',
@@ -414,12 +597,20 @@ class ChatController extends Controller
                 ], 403);
             }
 
-            // Get the other user
+            // Get the other user ID
             $otherUserId = ($chatSession->user1_id == $user->id) 
                 ? $chatSession->user2_id 
                 : $chatSession->user1_id;
-                
-            $receiver = User::find($otherUserId);
+            
+            // Get receiver data (checks both tables)
+            $receiverData = $this->getEntityData($otherUserId);
+            if (!$receiverData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Receiver not found',
+                    'errors' => (object)['receiver' => 'Receiver user not found']
+                ], 404);
+            }
 
             DB::beginTransaction();
 
@@ -445,18 +636,18 @@ class ChatController extends Controller
                         ];
                     }
                 }
-
+                
                 // Create message
                 $message = UserMessage::create([
                     'listing_id' => $chatSession->post_id,
                     'listing_title' => $chatSession->post ? $chatSession->post->title : null,
                     'from_id' => $user->id,
                     'to_id' => $otherUserId,
-                    'to_email' => $receiver->email,
-                    'to_name' => $receiver->name,
-                    'from_name' => $user->name,
-                    'from_email' => $user->email,
-                    'from_phone' => $user->phone,
+                    'to_email' => $receiverData['email'],
+                    'to_name' => $receiverData['name'],
+                    'from_name' => $currentUserData['name'],
+                    'from_email' => $currentUserData['email'],
+                    'from_phone' => $currentUserData['phone'],
                     'message_txt' => $request->message,
                     'subject' => $chatSession->post ? $chatSession->post->title : 'General Chat',
                     'chat_type_id' => $chatSession->chat_type_id,
@@ -501,8 +692,11 @@ class ChatController extends Controller
             }
 
         } catch (Exception $e) {
+            Log::error('Send message failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to send message',
@@ -616,8 +810,11 @@ class ChatController extends Controller
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get messages failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-            dd($e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve messages',
@@ -723,6 +920,11 @@ class ChatController extends Controller
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get conversations failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve conversations',
@@ -791,6 +993,11 @@ class ChatController extends Controller
             ]);
 
         } catch (Exception $e) {
+            Log::error('Mark messages as read failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark messages as read',
@@ -836,6 +1043,11 @@ class ChatController extends Controller
             ]);
 
         } catch (Exception $e) {
+            Log::error('Delete message failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete message',
@@ -881,6 +1093,11 @@ class ChatController extends Controller
             ]);
 
         } catch (Exception $e) {
+            Log::error('Close chat session failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to close chat session',
@@ -930,6 +1147,12 @@ class ChatController extends Controller
         $user = Auth::user();
         $attachments = $message->attachments ? json_decode($message->attachments, true) : [];
         
+        // Get sender data from both tables
+        $senderData = $this->getEntityData($message->from_id);
+        
+        // Get receiver data from both tables
+        $receiverData = $this->getEntityData($message->to_id);
+        
         $formatted = [
             'id' => $message->id,
             'message' => $message->message_txt,
@@ -948,19 +1171,21 @@ class ChatController extends Controller
             'created_at' => $message->created_at,
             'updated_at' => $message->updated_at,
             'is_sender' => $message->from_id == $user->id,
-            'sender' => $message->sender ? [
-                'id' => $message->sender->id,
-                'name' => $message->sender->name,
-                'email' => $message->sender->email,
-                'image' => $message->sender->image ? asset('user_images/' . $message->sender->image) : null,
-                'usertype' => $message->sender->usertype
+            'sender' => $senderData ? [
+                'id' => $senderData['id'],
+                'name' => $senderData['name'],
+                'email' => $senderData['email'],
+                'image' => $senderData['image'],
+                'usertype' => $senderData['usertype'],
+                'entity_type' => $senderData['entity_type']
             ] : null,
-            'receiver' => $message->receiver ? [
-                'id' => $message->receiver->id,
-                'name' => $message->receiver->name,
-                'email' => $message->receiver->email,
-                'image' => $message->receiver->image ? asset('user_images/' . $message->receiver->image) : null,
-                'usertype' => $message->receiver->usertype
+            'receiver' => $receiverData ? [
+                'id' => $receiverData['id'],
+                'name' => $receiverData['name'],
+                'email' => $receiverData['email'],
+                'image' => $receiverData['image'],
+                'usertype' => $receiverData['usertype'],
+                'entity_type' => $receiverData['entity_type']
             ] : null,
         ];
 
@@ -1003,13 +1228,18 @@ class ChatController extends Controller
         $otherUser = $this->getOtherUserInSession($session, $currentUser->id);
         $lastMessage = $session->messages->first();
         
+        // Get other user data from both tables
+        $otherUserData = $otherUser ? $this->getEntityData($otherUser->id) : null;
+        
         $formatted = [
             'session_id' => $session->id,
-            'other_user' => $otherUser ? [
-                'id' => $otherUser->id,
-                'name' => $otherUser->name,
-                'image' => $otherUser->image ? asset('user_images/' . $otherUser->image) : null,
-                'usertype' => $otherUser->usertype
+            'other_user' => $otherUserData ? [
+                'id' => $otherUserData['id'],
+                'name' => $otherUserData['name'],
+                'email' => $otherUserData['email'],
+                'image' => $otherUserData['image'],
+                'usertype' => $otherUserData['usertype'],
+                'entity_type' => $otherUserData['entity_type']
             ] : null,
             'unread_count' => $session->unread_count,
             'last_message_at' => $session->last_message_at,

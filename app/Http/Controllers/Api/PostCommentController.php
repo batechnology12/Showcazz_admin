@@ -6,14 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Post;
 use App\PostComment;
 use App\Models\CommentLike;
+use App\User;
+use App\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Exception;
+use Illuminate\Support\Facades\DB;
 
 class PostCommentController extends Controller
 {
     /**
-     * Get comments for a post
+     * Get comments for a post - FIXED with direct table checks
      */
     public function getComments($postId)
     {
@@ -33,19 +37,14 @@ class PostCommentController extends Controller
                 ], 404);
             }
 
-            // Get parent comments with pagination
-            $comments = PostComment::with([
-                'user',
-                'replies.user',
-                'replies.replies.user' // For nested replies
-            ])
-            ->where('post_id', $postId)
-            ->whereNull('parent_comment_id')
-            ->where('is_active', true)
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+            // Get parent comments with pagination - WITHOUT loading user relations
+            $comments = PostComment::where('post_id', $postId)
+                ->whereNull('parent_comment_id')
+                ->where('is_active', true)
+                ->orderBy('created_at', 'desc')
+                ->paginate(20);
 
-            // Format comments
+            // Format comments with direct table checks
             $formattedComments = $comments->map(function ($comment) use ($user) {
                 return $this->formatComment($comment, $user);
             });
@@ -67,7 +66,7 @@ class PostCommentController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve comments',
+                'message' => 'Failed to retrieve comments: ' . $e->getMessage(),
                 'errors' => (object)['server' => 'An error occurred']
             ], 500);
         }
@@ -117,8 +116,10 @@ class PostCommentController extends Controller
                 'is_active' => true,
             ]);
 
-            // Load relationships
-            $comment->load(['user', 'replies.user']);
+            // Load replies if any
+            if ($request->parent_comment_id) {
+                $comment->replies = collect([]);
+            }
 
             // Update post comments count
             $post->increment('comments_count');
@@ -147,8 +148,7 @@ class PostCommentController extends Controller
             $user = Auth::user();
             
             // Find comment
-            $comment = PostComment::with(['user', 'replies.user'])
-                                ->find($commentId);
+            $comment = PostComment::find($commentId);
             
             if (!$comment) {
                 return response()->json([
@@ -320,7 +320,7 @@ class PostCommentController extends Controller
     }
 
     /**
-     * Get comment likes
+     * Get comment likes - FIXED with direct table checks
      */
     public function getCommentLikes($commentId)
     {
@@ -338,21 +338,21 @@ class PostCommentController extends Controller
                 ], 404);
             }
 
-            // Get likes with user data
-            $likes = CommentLike::with('user')
-                                ->where('comment_id', $commentId)
+            // Get likes without loading user relation
+            $likes = CommentLike::where('comment_id', $commentId)
                                 ->orderBy('created_at', 'desc')
                                 ->paginate(50);
 
-            $formattedLikes = $likes->map(function ($like) {
-                return [
-                    'user_id' => $like->user_id,
-                    'name' => $like->user->name,
-                    'usertype' => $like->user->usertype,
-                    'image' => $like->user->image ? asset('user_images/' . $like->user->image) : null,
-                    'liked_at' => $like->created_at,
-                ];
-            });
+            // Get all user IDs
+            $userIds = $likes->pluck('user_id')->unique();
+            
+            // Fetch users and companies directly
+            $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+            $companies = Company::whereIn('id', $userIds)->get()->keyBy('id');
+
+            $formattedLikes = $likes->map(function ($like) use ($users, $companies) {
+                return $this->getLikeAuthorData($like, $users, $companies);
+            })->filter();
 
             return response()->json([
                 'success' => true,
@@ -378,11 +378,46 @@ class PostCommentController extends Controller
     }
 
     /**
-     * Format comment response
+     * Format comment response - FIXED with direct table checks
      */
     private function formatComment($comment, $user = null)
     {
         $user = $user ?? Auth::user();
+        
+        // Get author data by checking both tables
+        $authorData = $this->getEntityData($comment->user_id);
+        
+        // Check if user liked this comment
+        $isLiked = false;
+        if ($user) {
+            $isLiked = CommentLike::where('comment_id', $comment->id)
+                                ->where('user_id', $user->id)
+                                ->exists();
+        }
+        
+        // Check if user owns this comment
+        $isOwner = false;
+        if ($user) {
+            $isOwner = ($comment->user_id == $user->id);
+        }
+        
+        // Get replies count
+        $repliesCount = PostComment::where('parent_comment_id', $comment->id)
+                                 ->where('is_active', true)
+                                 ->count();
+        
+        // Get replies with direct table checks
+        $replies = collect([]);
+        if ($repliesCount > 0) {
+            $replyComments = PostComment::where('parent_comment_id', $comment->id)
+                                      ->where('is_active', true)
+                                      ->orderBy('created_at', 'asc')
+                                      ->get();
+            
+            $replies = $replyComments->map(function ($reply) use ($user) {
+                return $this->formatComment($reply, $user);
+            });
+        }
         
         $formatted = [
             'id' => $comment->id,
@@ -393,31 +428,164 @@ class PostCommentController extends Controller
             'parent_comment_id' => $comment->parent_comment_id,
             'stats' => [
                 'likes' => $comment->likes_count ?? 0,
-                'replies' => $comment->replies_count ?? count($comment->replies),
+                'replies' => $repliesCount,
             ],
-            'is_liked' => $user ? $this->checkIfLiked($comment->id, $user->id) : false,
-            'is_owner' => $user ? ($comment->user_id == $user->id) : false,
-            'author' => $comment->user ? [
-                'id' => $comment->user->id,
-                'name' => $comment->user->name,
-                'usertype' => $comment->user->usertype,
-                'image' => $comment->user->image ? asset('user_images/' . $comment->user->image) : null,
-            ] : null,
-            'replies' => $comment->replies->map(function ($reply) use ($user) {
-                return $this->formatComment($reply, $user);
-            }),
+            'is_liked' => $isLiked,
+            'is_owner' => $isOwner,
+            'author' => $authorData,
+            'replies' => $replies,
         ];
 
         return $formatted;
     }
 
     /**
-     * Check if user liked the comment
+     * Get like author data - checks both users and companies
      */
-    private function checkIfLiked($commentId, $userId)
+    private function getLikeAuthorData($like, $users, $companies)
     {
-        return CommentLike::where('comment_id', $commentId)
-                          ->where('user_id', $userId)
-                          ->exists();
+        // Check if it's a user
+        if (isset($users[$like->user_id])) {
+            $user = $users[$like->user_id];
+            
+            // If user is company type
+            if ($user->usertype === 'company') {
+                $company = Company::where('user_id', $user->id)->first();
+                if ($company) {
+                    return [
+                        'user_id' => $company->id,
+                        'name' => $company->name,
+                        'usertype' => 'company',
+                        'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                        'liked_at' => $like->created_at,
+                    ];
+                }
+            }
+            
+            // Regular user
+            $fullName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+            $fullName = $fullName ?: ($user->name ?? 'Unknown User');
+            
+            return [
+                'user_id' => $user->id,
+                'name' => $fullName,
+                'usertype' => $user->usertype,
+                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'liked_at' => $like->created_at,
+            ];
+        }
+
+        // Check if it's a company
+        if (isset($companies[$like->user_id])) {
+            $company = $companies[$like->user_id];
+            return [
+                'user_id' => $company->id,
+                'name' => $company->name,
+                'usertype' => 'company',
+                'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                'liked_at' => $like->created_at,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Get entity data (User or Company) by ID - DIRECT TABLE CHECK
+     */
+    private function getEntityData($id)
+    {
+        if (!$id) {
+            return null;
+        }
+
+        // FIRST: Check if this ID exists in companies table (direct company)
+        $company = Company::find($id);
+        if ($company) {
+            return [
+                'id' => $company->id,
+                'name' => $company->name,
+                'usertype' => 'company',
+                'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+            ];
+        }
+
+        // SECOND: Check users table
+        $user = User::find($id);
+        if ($user) {
+            // Check if this user is actually a company (usertype = company)
+            if ($user->usertype === 'company') {
+                $companyRecord = Company::where('user_id', $user->id)->first();
+                if ($companyRecord) {
+                    return [
+                        'id' => $companyRecord->id,
+                        'name' => $companyRecord->name,
+                        'usertype' => 'company',
+                        'image' => $companyRecord->logo ? asset('company_logos/' . $companyRecord->logo) : null,
+                    ];
+                }
+            }
+            
+            // Regular user
+            $firstName = $user->first_name ?? '';
+            $lastName = $user->last_name ?? '';
+            $name = trim($firstName . ' ' . $lastName);
+            $name = $name ?: ($user->name ?? 'Unknown User');
+            
+            return [
+                'id' => $user->id,
+                'name' => $name,
+                'usertype' => $user->usertype ?? 'user',
+                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+            ];
+        }
+
+        // Not found in either table
+        return [
+            'id' => $id,
+            'name' => 'Unknown User',
+            'usertype' => 'unknown',
+            'image' => null,
+        ];
+    }
+
+    /**
+     * Get replies for a comment - HELPER METHOD
+     */
+    public function getReplies($commentId)
+    {
+        try {
+            $user = Auth::user();
+            
+            $replies = PostComment::where('parent_comment_id', $commentId)
+                                 ->where('is_active', true)
+                                 ->orderBy('created_at', 'asc')
+                                 ->paginate(20);
+            
+            $formattedReplies = $replies->map(function ($reply) use ($user) {
+                return $this->formatComment($reply, $user);
+            });
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Replies retrieved successfully',
+                'data' => [
+                    'replies' => $formattedReplies,
+                    'pagination' => [
+                        'current_page' => $replies->currentPage(),
+                        'per_page' => $replies->perPage(),
+                        'total' => $replies->total(),
+                        'last_page' => $replies->lastPage(),
+                    ]
+                ]
+            ]);
+            
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve replies',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
     }
 }

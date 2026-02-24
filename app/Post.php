@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\PostType;
 use App\Models\Category;
 use App\Models\Subcategory;
+use App\Models\PostRepost;
 
 class Post extends Model
 {
@@ -45,7 +46,10 @@ class Post extends Model
         'views_count',
         'likes_count',
         'comments_count',
+        'repost_count',
         'shares_count',
+        'is_repost',
+        'post_user_type',
     ];
     
     protected $casts = [
@@ -66,6 +70,11 @@ class Post extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+    
+    public function company()
+    {
+        return $this->hasOne(Company::class, 'user_id');
     }
     
     /**
@@ -215,6 +224,58 @@ class Post extends Model
         return array_map(function($file) {
             return asset('post_files/' . $file);
         }, $this->files);
+    }
+    
+    
+    
+    // Add these relationships to your Post model
+
+    /**
+     * Get the reposts of this post
+     */
+    public function reposts()
+    {
+        return $this->hasMany(PostRepost::class, 'original_post_id');
+    }
+    
+    /**
+     * Get the reposted posts (if this post is a repost)
+     */
+    public function repostedFrom()
+    {
+        return $this->belongsTo(Post::class, 'original_post_id');
+    }
+    
+    /**
+     * Check if this post is a repost
+     */
+    public function getIsRepostAttribute()
+    {
+        return !is_null($this->original_post_id);
+    }
+    
+    /**
+     * Get the original post (if this is a repost)
+     */
+    public function originalPost()
+    {
+        return $this->belongsTo(Post::class, 'original_post_id');
+    }
+    
+    /**
+     * Get the repost record if this post is a repost
+     */
+    public function repostRecord()
+    {
+        return $this->hasOne(PostRepost::class, 'reposted_post_id');
+    }
+    
+    /**
+     * Get repost count
+     */
+    public function getRepostCountAttribute()
+    {
+        return $this->reposts()->count();
     }
     
     /**

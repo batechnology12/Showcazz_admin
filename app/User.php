@@ -86,7 +86,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'video_link',
         'is_featured',
         'featured_package_end_at',
-        'featured_package_start_at'
+        'featured_package_start_at',
+        'start_year',
+        'end_year',
+        'currently_pursuing'
+        
+        
+       
     ];
 
     protected $casts = [
@@ -202,6 +208,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany('App\FavouriteCompany', 'user_id', 'id');
     }
 
+    
 
     public function mutualConnectionsWith($userId)
     {
