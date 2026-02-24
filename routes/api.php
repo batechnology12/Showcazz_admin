@@ -2,14 +2,14 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\RegisterController;
-use App\Http\Controllers\API\PostTypeController;
-use App\Http\Controllers\API\CategoryController;
-use App\Http\Controllers\API\SubcategoryController;
-use App\Http\Controllers\API\CommonController;
-use App\Http\Controllers\API\ForgotPasswordController;
-use App\Http\Controllers\API\UniversalConnectionController;
-use App\Http\Controllers\API\PostController;
-use App\Http\Controllers\API\PostCommentController;
+use App\Http\Controllers\Api\PostTypeController;
+use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\SubcategoryController;
+use App\Http\Controllers\Api\CommonController;
+use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\UniversalConnectionController;
+use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\ChatController;
 
 // Public routes
