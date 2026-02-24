@@ -43,28 +43,28 @@ class PostController extends Controller
     {
         
         
-    try {
-        $user = Auth::user();
-        
-        // Check if this is a job post (category_id = 5)
-        // if ($request->category_id == 5) {
-        //     return $this->createJobPost($request, $user);
-        // }
-       
-        return $this->createRegularPost($request, $user);
+		try {
+			$user = Auth::user();
+			
+			// Check if this is a job post (category_id = 5)
+			// if ($request->category_id == 5) {
+			//     return $this->createJobPost($request, $user);
+			// }
+		   
+			return $this->createRegularPost($request, $user);
 
-    } catch (Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to create post',
-            'error' => [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]
-        ], 500);
-    }
-}
+		} catch (Exception $e) {
+			return response()->json([
+				'success' => false,
+				'message' => 'Failed to create post',
+				'error' => [
+					'message' => $e->getMessage(),
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				]
+			], 500);
+		}
+	}
 
 /**
  * Create regular post (Handles 12 types excluding jobs)

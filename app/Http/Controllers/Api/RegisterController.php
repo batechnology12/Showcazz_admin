@@ -78,6 +78,9 @@ class RegisterController extends Controller
                     'slug' => Str::random(10) . '-' . time(), // Temporary slug
                     'is_active' => 1,
                 ]);
+				
+				$company->unique_id = 'SCHWZ' . str_pad($company->id, 6, '0', STR_PAD_LEFT);
+				$company->save();
 
                 $token = $company->createToken('company_auth_token')->plainTextToken;
                 
@@ -115,6 +118,9 @@ class RegisterController extends Controller
                 ]);
 
                 $token = $user->createToken('auth_token')->plainTextToken;
+				
+				$user->unique_id = 'SCHWZ' . str_pad($user->id, 6, '0', STR_PAD_LEFT);
+				$user->save();
                 
                 DB::commit();
                 
