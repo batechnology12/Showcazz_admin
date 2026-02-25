@@ -71,18 +71,35 @@ class PostController extends Controller
  */
 private function createRegularPost(Request $request, $user)
 {
-    $validator = Validator::make($request->all(), [
+   $validator = Validator::make($request->all(), [
         'post_type_id' => 'required|exists:post_types,id',
         'category_id' => 'required|exists:categories,id',
         'subcategory_id' => 'nullable',
         'title' => 'required|string|max:255',
         'content' => 'required|string',
         'short_description' => 'nullable|string|max:500',
+
         'images' => 'nullable|array',
         'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+
         'files' => 'nullable|array',
         'files.*' => 'file|mimes:pdf,doc,docx,txt,zip|max:10240',
+
         'is_published' => 'boolean',
+    ], [
+
+        // ✅ Custom size messages
+        'images.*.max' => 'Each image must not exceed 10 MB.',
+        'files.*.max'  => 'Each file must not exceed 10 MB.',
+
+        // optional mime messages
+        'images.*.mimes' => 'Images must be jpeg, png, jpg, gif or webp format.',
+        'files.*.mimes'  => 'Files must be pdf, doc, docx, txt or zip.',
+    ]);
+
+    $validator->setAttributeNames([
+        'images.*' => 'Image',
+        'files.*'  => 'File',
     ]);
 
     // Additional validation based on category and subcategory
