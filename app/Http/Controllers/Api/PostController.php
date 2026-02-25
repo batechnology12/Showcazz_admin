@@ -80,17 +80,17 @@ private function createRegularPost(Request $request, $user)
         'short_description' => 'nullable|string|max:500',
 
         'images' => 'nullable|array',
-        'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+        'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:102400',
 
         'files' => 'nullable|array',
-        'files.*' => 'file|mimes:pdf,doc,docx,txt,zip|max:10240',
+        'files.*' => 'file|mimes:pdf,doc,docx,txt,zip|max:102400',
 
         'is_published' => 'boolean',
     ], [
 
         // ✅ Custom size messages
-        'images.*.max' => 'Each image must not exceed 10 MB.',
-        'files.*.max'  => 'Each file must not exceed 10 MB.',
+        'images.*.max' => 'Each image must not exceed 100 MB.',
+        'files.*.max'  => 'Each file must not exceed 100 MB.',
 
         // optional mime messages
         'images.*.mimes' => 'Images must be jpeg, png, jpg, gif or webp format.',
