@@ -79,7 +79,7 @@ private function createRegularPost(Request $request, $user)
         'content' => 'required|string',
         'short_description' => 'nullable|string|max:500',
         'images' => 'nullable|array',
-        'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+        'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240',
         'files' => 'nullable|array',
         'files.*' => 'file|mimes:pdf,doc,docx,txt,zip|max:10240',
         'is_published' => 'boolean',
