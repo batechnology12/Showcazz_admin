@@ -142,6 +142,38 @@ class Company extends Authenticatable
         $this->notify(new CompanyResetPassword($token));
 
     }
+    
+    
+     public function posts()
+    {
+        return $this->hasMany(Post::class, 'user_id', 'id');
+    }
+
+    /**
+     * Get only job posts (category_id = 5)
+     */
+    public function jobPosts()
+    {
+        return $this->posts()->where('category_id', 5);
+    }
+
+    /**
+     * Get only regular posts (category_id != 5)
+     */
+    public function regularPosts()
+    {
+        return $this->posts()->where('category_id', '!=', 5);
+    }
+
+    /**
+     * Get posts with engagement statistics
+     */
+    public function postsWithStats()
+    {
+        return $this->posts()
+            ->withCount(['likes', 'comments', 'shares'])
+            ->with(['postType', 'category', 'subcategory']);
+    }
 
 
 

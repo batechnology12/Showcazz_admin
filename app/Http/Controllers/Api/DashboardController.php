@@ -27,6 +27,7 @@ class DashboardController extends Controller
 {
     /**
      * Get dashboard data with filters - RANDOM POSTS ON EVERY REQUEST
+     * With visibility control: public posts visible to all, private posts only to connections
      */
     public function getDashboard(Request $request)
     {
@@ -71,16 +72,16 @@ class DashboardController extends Controller
             // Get user's connections
             $connectionIds = $this->getUserConnections($user);
             
-            // Get main feed posts (will be randomized)
+            // Get main feed posts (with visibility control)
             $posts = $this->getFilteredPosts($user, $request, $connectionIds);
             
             // Get IDs of posts already in main feed to exclude from other sections
             $excludedPostIds = collect($posts['posts'])->pluck('id')->toArray();
             
-            // Get trending posts (exclude posts from main feed)
+            // Get trending posts (with visibility control)
             $trendingPosts = $this->getTrendingPosts($user, $connectionIds, $excludedPostIds);
             
-            // Get featured posts (exclude posts from main feed and trending)
+            // Get featured posts (with visibility control)
             $allExcludedIds = array_merge($excludedPostIds, collect($trendingPosts)->pluck('id')->toArray());
             $featuredPosts = $this->getFeaturedPosts($user, $connectionIds, $allExcludedIds);
             
@@ -129,7 +130,7 @@ class DashboardController extends Controller
                         'active_filter' => $request->filter ?? 'all',
                         'search_term' => $request->search,
                         'show_connections_only' => $request->show_connections_only ?? false,
-                        'shuffled' => true, // Indicate that posts are shuffled
+                        'shuffled' => true,
                     ]
                 ]
             ]);
@@ -198,6 +199,49 @@ class DashboardController extends Controller
     }
 
     /**
+     * Get author's visibility control setting
+     */
+    private function getAuthorVisibility($authorId)
+    {
+        $user = User::find($authorId);
+        if ($user) {
+            return $user->visibility_control ?? 'public';
+        }
+        
+        $company = Company::find($authorId);
+        if ($company) {
+            return $company->visibility_control ?? 'public';
+        }
+        
+        return 'public'; // Default to public if author not found
+    }
+
+    /**
+     * Check if current user can view a post based on author's visibility and connection status
+     */
+    private function canViewPost($currentUser, $authorId, $connectionIds)
+    {
+        // If it's the user's own post, always visible
+        if ($currentUser->id == $authorId) {
+            return true;
+        }
+        
+        $visibility = $this->getAuthorVisibility($authorId);
+        
+        // If author's profile is public, anyone can view
+        if ($visibility == 'public') {
+            return true;
+        }
+        
+        // If author's profile is private, only connections can view
+        if ($visibility == 'private') {
+            return in_array($authorId, $connectionIds);
+        }
+        
+        return true; // Default fallback
+    }
+
+    /**
      * Get enriched entity data - Works for both User & Company
      */
     private function getEnrichedEntityData($entity)
@@ -215,6 +259,7 @@ class DashboardController extends Controller
                 'headline' => $entity->description ?? null,
                 'image' => $entity->logo ? asset('company_logos/' . $entity->logo) : null,
                 'slug' => $entity->slug ?? null,
+                'visibility_control' => $entity->visibility_control ?? 'public',
                 'entity_type' => 'company',
             ];
         }
@@ -231,6 +276,7 @@ class DashboardController extends Controller
                         'headline' => $company->description,
                         'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
                         'slug' => $company->slug,
+                        'visibility_control' => $company->visibility_control ?? 'public',
                         'entity_type' => 'company',
                     ];
                 }
@@ -249,6 +295,7 @@ class DashboardController extends Controller
                 'headline' => $entity->headline ?? null,
                 'image' => $entity->image ? asset('user_images/' . $entity->image) : null,
                 'slug' => null,
+                'visibility_control' => $entity->visibility_control ?? 'public',
                 'entity_type' => 'user',
             ];
         }
@@ -311,13 +358,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get user's connection IDs
+     * Get user's connection IDs (accepted connections)
      */
     private function getUserConnections($user)
     {
         $connectionIds = [];
         
         if ($user instanceof User) {
+            // Get accepted followers and following
             $following = UserConnection::where('follower_id', $user->id)
                 ->where('status', 'accepted')
                 ->pluck('following_id')
@@ -330,12 +378,14 @@ class DashboardController extends Controller
             
             $connectionIds = array_unique(array_merge($following, $followers));
             
+            // Get followed companies
             $followedCompanies = FavouriteCompany::where('user_id', $user->id)
                 ->pluck('company_id')
                 ->toArray();
             
             $connectionIds = array_merge($connectionIds, $followedCompanies);
         } else {
+            // For companies, get followers
             $followers = FavouriteCompany::where('company_id', $user->id)
                 ->pluck('user_id')
                 ->toArray();
@@ -418,14 +468,25 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get filtered posts - MAIN FEED WITH RANDOM ORDERING
-     * Posts are shuffled on every request for a fresh feed experience
+     * Get filtered posts - WITH VISIBILITY CONTROL
+     * Public posts visible to all, private posts only to connections
      */
     private function getFilteredPosts($user, $request, $connectionIds)
     {
         $perPage = $request->per_page ?? 20;
         $page = $request->page ?? 1;
-        $shuffle = $request->shuffle ?? true; // Default to true for random feed
+        $shuffle = $request->shuffle ?? true;
+        
+        // Get all users and companies with their visibility settings
+        $publicUserIds = User::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicCompanyIds = Company::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicAuthorIds = array_merge($publicUserIds, $publicCompanyIds);
         
         $query = Post::with([
             'user',
@@ -437,6 +498,22 @@ class DashboardController extends Controller
         ->where('is_active', true)
         ->where('is_published', true);
 
+        // Apply visibility control
+        $query->where(function($q) use ($user, $publicAuthorIds, $connectionIds) {
+            // Include user's own posts
+            $q->where('user_id', $user->id);
+            
+            // Include posts from public authors
+            if (!empty($publicAuthorIds)) {
+                $q->orWhereIn('user_id', $publicAuthorIds);
+            }
+            
+            // Include posts from connections (private authors that user is connected to)
+            if (!empty($connectionIds)) {
+                $q->orWhereIn('user_id', $connectionIds);
+            }
+        });
+
         // Apply filters
         if ($request->filter == 'featured') {
             $query->where('category_id', 5);
@@ -445,7 +522,6 @@ class DashboardController extends Controller
             $query->where('created_at', '>=', $sevenDaysAgo)
                 ->orderByRaw('(likes_count * 1 + comments_count * 2 + shares_count * 3 + views_count * 0.1) DESC');
         } elseif ($request->filter == 'random') {
-            // Explicit random filter - always random
             $query->inRandomOrder();
         }
 
@@ -466,25 +542,21 @@ class DashboardController extends Controller
             $query->where('post_type_id', $request->post_type_id);
         }
 
-        // Show only posts from connections if requested
+        // Show only posts from connections if specifically requested
         if ($request->show_connections_only && !empty($connectionIds)) {
             $query->whereIn('user_id', $connectionIds);
         }
 
-        // Apply ordering - RANDOM for non-trending filters (for fresh feed every time)
+        // Apply ordering
         if ($request->filter == 'trending') {
-            // Trending already has orderByRaw applied above
-            // No additional ordering needed
+            // Already ordered above
         } elseif ($request->filter == 'random') {
-            // Random already has inRandomOrder applied above
-            // No additional ordering needed
+            // Already ordered above
         } else {
-            // For all other filters (all, featured, or no filter), use random ordering
-            // This ensures posts are shuffled on every request
             if ($shuffle) {
-                $query->inRandomOrder(); // MySQL RAND() for random ordering
+                $query->inRandomOrder();
             } else {
-                $query->orderBy('created_at', 'desc'); // Fallback to chronological
+                $query->orderBy('created_at', 'desc');
             }
         }
 
@@ -503,23 +575,43 @@ class DashboardController extends Controller
                 'per_page' => $posts->perPage(),
                 'total' => $posts->total(),
                 'last_page' => $posts->lastPage(),
-                'shuffled' => true, // Indicate that results are shuffled
+                'shuffled' => true,
             ]
         ];
     }
 
     /**
-     * Get trending posts - EXCLUDES posts from main feed
+     * Get trending posts - WITH VISIBILITY CONTROL
      */
     private function getTrendingPosts($user, $connectionIds, $excludedPostIds = [])
     {
         $sevenDaysAgo = Carbon::now()->subDays(7);
+        
+        $publicUserIds = User::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicCompanyIds = Company::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicAuthorIds = array_merge($publicUserIds, $publicCompanyIds);
         
         $query = Post::with(['user', 'category', 'subcategory'])
             ->withCount(['likes', 'comments', 'shares', 'views'])
             ->where('is_active', true)
             ->where('is_published', true)
             ->where('created_at', '>=', $sevenDaysAgo);
+        
+        // Apply visibility control
+        $query->where(function($q) use ($user, $publicAuthorIds, $connectionIds) {
+            $q->where('user_id', $user->id)
+              ->orWhereIn('user_id', $publicAuthorIds);
+            
+            if (!empty($connectionIds)) {
+                $q->orWhereIn('user_id', $connectionIds);
+            }
+        });
         
         if (!empty($excludedPostIds)) {
             $query->whereNotIn('id', $excludedPostIds);
@@ -536,15 +628,35 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get featured/job posts - EXCLUDES posts from main feed and trending
+     * Get featured/job posts - WITH VISIBILITY CONTROL
      */
     private function getFeaturedPosts($user, $connectionIds, $excludedPostIds = [])
     {
+        $publicUserIds = User::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicCompanyIds = Company::where('visibility_control', 'public')
+            ->pluck('id')
+            ->toArray();
+        
+        $publicAuthorIds = array_merge($publicUserIds, $publicCompanyIds);
+        
         $query = Post::with(['user', 'category', 'subcategory'])
             ->withCount(['likes', 'comments', 'shares', 'views'])
             ->where('is_active', true)
             ->where('is_published', true)
             ->where('category_id', 5);
+        
+        // Apply visibility control
+        $query->where(function($q) use ($user, $publicAuthorIds, $connectionIds) {
+            $q->where('user_id', $user->id)
+              ->orWhereIn('user_id', $publicAuthorIds);
+            
+            if (!empty($connectionIds)) {
+                $q->orWhereIn('user_id', $connectionIds);
+            }
+        });
         
         if (!empty($excludedPostIds)) {
             $query->whereNotIn('id', $excludedPostIds);
@@ -625,7 +737,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get network updates - FIXED no "Unknown User"
+     * Get network updates - WITH VISIBILITY CONTROL
      */
     private function getNetworkUpdates($user)
     {
@@ -818,7 +930,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get connection suggestions
+     * Get connection suggestions - WITH VISIBILITY CONTROL
+     * Only suggest public profiles or connections of connections
      */
     private function getConnectionSuggestions($user)
     {
@@ -844,7 +957,9 @@ class DashboardController extends Controller
 
             $userSkills = $user->specialization ? explode(',', $user->specialization) : [];
             
+            // Suggest users with public visibility
             $suggestedUsers = User::where('is_active', 1)
+                ->where('visibility_control', 'public') // Only suggest public profiles
                 ->where('id', '!=', $user->id)
                 ->whereNotIn('id', $allConnections)
                 ->where(function($q) use ($userInterests, $userSkills, $user) {
@@ -872,8 +987,8 @@ class DashboardController extends Controller
                         $q->orWhere('location', 'like', "%{$user->location}%");
                     }
                 })
-                ->select('id', 'first_name', 'last_name', 'usertype', 'headline', 'image', 'location', 'industry')
-                ->inRandomOrder() // Randomize suggestions
+                ->select('id', 'first_name', 'last_name', 'usertype', 'headline', 'image', 'location', 'industry', 'visibility_control')
+                ->inRandomOrder()
                 ->limit(5)
                 ->get()
                 ->map(function($suggestedUser) use ($user) {
@@ -887,6 +1002,7 @@ class DashboardController extends Controller
                         'image' => $suggestedUser->image ? asset('user_images/' . $suggestedUser->image) : null,
                         'location' => $suggestedUser->location,
                         'industry' => $suggestedUser->industry,
+                        'visibility_control' => $suggestedUser->visibility_control,
                         'mutual_connections' => $this->getMutualConnectionCount($user->id, $suggestedUser->id),
                         'connection_status' => $this->checkIfConnected($user, $suggestedUser->id),
                         'entity_type' => 'user',
@@ -904,7 +1020,9 @@ class DashboardController extends Controller
                 ->pluck('following_id')
                 ->toArray();
             
+            // Suggest companies with public visibility
             $suggestedCompanies = Company::where('is_active', 1)
+                ->where('visibility_control', 'public') // Only suggest public companies
                 ->whereNotIn('id', $followedCompanyIds)
                 ->whereNotIn('id', $blockedCompanyIds)
                 ->whereNotIn('id', $allConnections)
@@ -920,6 +1038,7 @@ class DashboardController extends Controller
                         'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
                         'location' => $company->location,
                         'industry' => $company->industry,
+                        'visibility_control' => $company->visibility_control,
                         'mutual_connections' => 0,
                         'connection_status' => $this->checkIfConnected($user, $company->id),
                         'entity_type' => 'company',
@@ -933,7 +1052,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Format post for dashboard - USING POST_REPOSTS TABLE
+     * Format post for dashboard - WITH VISIBILITY CONTROL INFO
      */
     private function formatPostForDashboard($post, $currentUser)
     {
@@ -973,13 +1092,14 @@ class DashboardController extends Controller
                 'headline' => null,
                 'image' => null,
                 'slug' => null,
+                'visibility_control' => 'public',
                 'entity_type' => 'unknown',
             ];
         }
         
         $isConnected = $this->checkIfConnected($currentUser, $authorData['id']);
 
-        // Check if this post is a repost by looking in post_reposts table
+        // Check if this post is a repost
         $repostRecord = PostRepost::where('reposted_post_id', $post->id)->first();
         $isRepost = !is_null($repostRecord);
         
@@ -1001,6 +1121,10 @@ class DashboardController extends Controller
             'tags' => $tags,
             'stats' => $stats,
             'author' => $authorData,
+            'visibility_info' => [
+                'author_visibility' => $authorData['visibility_control'],
+                'is_visible' => $this->canViewPost($currentUser, $authorData['id'], $this->getUserConnections($currentUser)),
+            ],
             'recent_likes' => [],
             'recent_comments' => [],
         ];
@@ -1021,6 +1145,7 @@ class DashboardController extends Controller
                         'name' => 'Unknown User',
                         'usertype' => 'unknown',
                         'image' => null,
+                        'visibility_control' => 'public',
                     ];
                 }
                 
@@ -1042,7 +1167,6 @@ class DashboardController extends Controller
                     ],
                 ];
                 
-                // Also add a flag to show this in UI
                 $formatted['display_type'] = 'repost';
                 $formatted['repost_comment'] = $repostRecord->repost_comment;
             }
@@ -1056,17 +1180,26 @@ class DashboardController extends Controller
             
             $repostCount = $post->repost_count ?? $reposts->count();
             
-            $repostedBy = $reposts->map(function($repost) {
+            $repostedBy = $reposts->map(function ($repost) {
+                if (!$repost->user) {
+                    return null;
+                }
+            
                 $reposterData = $this->getEnrichedEntityData($repost->user);
+            
+                if (!$reposterData) {
+                    return null;
+                }
+            
                 return [
-                    'id' => $reposterData['id'],
-                    'name' => $reposterData['name'],
-                    'usertype' => $reposterData['usertype'],
-                    'image' => $reposterData['image'],
-                    'reposted_at' => $repost->created_at->diffForHumans(),
+                    'id' => $reposterData['id'] ?? null,
+                    'name' => $reposterData['name'] ?? null,
+                    'usertype' => $reposterData['usertype'] ?? null,
+                    'image' => $reposterData['image'] ?? null,
+                    'reposted_at' => optional($repost->created_at)->diffForHumans(),
                     'repost_comment' => $repost->repost_comment,
                 ];
-            });
+            })->filter()->values();
             
             $formatted['repost_stats'] = [
                 'total_reposts' => $repostCount,
@@ -1078,7 +1211,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Format user data
+     * Format user data - WITH VISIBILITY CONTROL
      */
     private function formatUserData($user)
     {

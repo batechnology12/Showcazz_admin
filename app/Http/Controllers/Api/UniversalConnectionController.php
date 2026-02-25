@@ -447,6 +447,8 @@ class UniversalConnectionController extends Controller
     public function getAllConnections(Request $request)
     {
         
+        
+      
        
         try {
             $currentUser = Auth::user();

@@ -13,7 +13,7 @@ use App\Http\Controllers\Api\PostCommentController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\StaticPageController;
-
+use App\Http\Controllers\Api\JobOpportunityController;
 // Public routes
 Route::post('/register', [RegisterController::class, 'register']);
 Route::post('/login', [RegisterController::class, 'login']);
@@ -53,8 +53,37 @@ Route::prefix('password')->group(function () {
 });
 
 
+
+Route::middleware('auth:sanctum')->group(function() {
+    
+    // Get all opportunities (mini_mission & internship) with filters
+    Route::get('/opportunities', [JobOpportunityController::class, 'getOpportunities']);
+    
+    
+    Route::get('/chat_check_user', [ChatController::class, 'getOrCheckChatWithUser']);
+    // Get single opportunity details
+    Route::get('/opportunities/{id}', [JobOpportunityController::class, 'getOpportunityDetails']);
+    
+    // Get application questions for an opportunity
+    Route::get('/opportunities/{id}/questions', [JobOpportunityController::class, 'getApplicationQuestions']);
+    
+    // Apply to an opportunity
+    Route::post('/opportunities/{id}/apply', [JobOpportunityController::class, 'applyToOpportunity']);
+    
+    // Get opportunities posted by current user
+    Route::get('/my-posted-opportunities', [JobOpportunityController::class, 'getPostedOpportunities']);
+    
+    // Get opportunities applied by current user
+    Route::get('/my-applied-opportunities', [JobOpportunityController::class, 'getAppliedOpportunities']);
+});
+
+
+
 // Protected routes (require Sanctum authentication)
 Route::middleware('auth:sanctum')->group(function () {
+    
+    
+   
 
     Route::get('/dashboard', [DashboardController::class, 'getDashboard']);
     //auth
@@ -89,8 +118,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Get posts with filters
     Route::get('/posts', [PostController::class, 'getPosts']);
     // Single post operations
+    
+    
+    Route::get('/getPost_job/{id}', [PostController::class, 'getPost_job']);
     Route::get('/posts/{id}', [PostController::class, 'getPost']);
-    Route::put('/posts/{id}', [PostController::class, 'updatePost']);
+    Route::post('/posts/{id}', [PostController::class, 'updatePost']);
     Route::delete('/posts/{id}', [PostController::class, 'deletePost']);
     // Post interactions
     Route::post('/posts/{id}/like', [PostController::class, 'toggleLike']);
@@ -100,6 +132,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/posts/{id}/stats', [PostController::class, 'getPostStats']);
     Route::get('/my-posts', [PostController::class, 'getUserPosts']);
     Route::get('/users/{userId}/posts', [PostController::class, 'getPostsByUserId']);
+    
+    
+    //updatePost
+    Route::get('/posts/{id}/edit', [PostController::class, 'editPostDetails']);
+    Route::put('/posts/{id}', [PostController::class, 'updatePost']);
 
     //comments
     Route::get('/{id}/comments', [PostCommentController::class, 'getComments']);

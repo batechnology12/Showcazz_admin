@@ -14,6 +14,9 @@ class Post extends Model
     public $timestamps = true;
     protected $guarded = ['id'];
     protected $dates = ['created_at', 'updated_at', 'duration_start', 'duration_end', 'event_date', 'event_end_date', 'timeline_start', 'timeline_end'];
+    
+    
+    
     protected $fillable = [
         'user_id',
         'post_type_id',
@@ -46,10 +49,35 @@ class Post extends Model
         'views_count',
         'likes_count',
         'comments_count',
-        'repost_count',
         'shares_count',
+        'repost_count',
         'is_repost',
+        'original_post_id',
         'post_user_type',
+    
+        // ✅ Missing fields added
+        'role_type',
+        'work_mode',
+        'key_deliverables',
+        'internship_duration',
+        'stipend_amount',
+        'stipend_currency',
+        'convertible_to_full_time',
+        'ctc_amount',
+        'ctc_currency',
+        'application_deadline',
+        'is_job_post',
+        'organizer_id',
+        'host_id',
+        'idea_or_goal',
+        'outcome_or_fun_element',
+        'company_name',
+        'job_location',
+        'salary_range',
+        'experience_required',
+        'skills_required',
+        'benefits',
+        'application_url',
     ];
     
     protected $casts = [
@@ -119,6 +147,8 @@ class Post extends Model
     {
         return $this->hasMany(PostTag::class, 'post_id');
     }
+    
+    
     
     /**
      * Get tagged users

@@ -228,40 +228,40 @@
 
 
             <ul class="row dashnav">
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.jobs') }}" class="waves-effect waves-light"><i
-                            class="icon-briefcase"></i><span> Jobs </span></a></li>
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.jobs') }}" class="waves-effect waves-light"><i-->
+                <!--            class="icon-briefcase"></i><span> Jobs </span></a></li>-->
                 <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.companies') }}"
                         class="waves-effect waves-light"><i class="fa fa-building"></i><span> Companies </span></a></li>
                 <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.users') }}" class="waves-effect waves-light"><i
                             class="icon-user"></i><span> Users </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.cms') }}" class="waves-effect waves-light"><i
-                            class="fa fa-file-text-o" aria-hidden="true"></i><span> CMS
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('blog') }}" class="waves-effect waves-light"><i
-                            class="icon-briefcase"></i><span> Manage Blog </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.seo') }}" class="waves-effect waves-light"><i
-                            class="fa fa-line-chart" aria-hidden="true"></i><span> SEO
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.faqs') }}" class="waves-effect waves-light"><i
-                            class="fa fa-question-circle" aria-hidden="true"></i><span>
-                            FAQs </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.testimonials') }}"
-                        class="waves-effect waves-light"><i class="fa fa-file-text-o" aria-hidden="true"></i><span>
-                            Testimonials </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.packages') }}"
-                        class="waves-effect waves-light"><i class="fa fa-money" aria-hidden="true"></i><span> Packages
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.countries') }}"
-                        class="waves-effect waves-light"><i class="fa fa-globe" aria-hidden="true"></i><span> Countries
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.states') }}"
-                        class="waves-effect waves-light"><i class="fa fa-map" aria-hidden="true"></i><span> State
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.cities') }}"
-                        class="waves-effect waves-light"><i class="fa fa-map-marker" aria-hidden="true"></i><span> Cities
-                        </span></a></li>
-                <li class="col-lg-2 col-md-3 col-6"><a href="{{ route('edit.site.setting') }}"
-                        class="waves-effect waves-light"><i class="icon-wrench"></i><span> Site Settings </span></a></li>
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.cms') }}" class="waves-effect waves-light"><i-->
+                <!--            class="fa fa-file-text-o" aria-hidden="true"></i><span> CMS-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('blog') }}" class="waves-effect waves-light"><i-->
+                <!--            class="icon-briefcase"></i><span> Manage Blog </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.seo') }}" class="waves-effect waves-light"><i-->
+                <!--            class="fa fa-line-chart" aria-hidden="true"></i><span> SEO-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.faqs') }}" class="waves-effect waves-light"><i-->
+                <!--            class="fa fa-question-circle" aria-hidden="true"></i><span>-->
+                <!--            FAQs </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.testimonials') }}"-->
+                <!--        class="waves-effect waves-light"><i class="fa fa-file-text-o" aria-hidden="true"></i><span>-->
+                <!--            Testimonials </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.packages') }}"-->
+                <!--        class="waves-effect waves-light"><i class="fa fa-money" aria-hidden="true"></i><span> Packages-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.countries') }}"-->
+                <!--        class="waves-effect waves-light"><i class="fa fa-globe" aria-hidden="true"></i><span> Countries-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.states') }}"-->
+                <!--        class="waves-effect waves-light"><i class="fa fa-map" aria-hidden="true"></i><span> State-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('list.cities') }}"-->
+                <!--        class="waves-effect waves-light"><i class="fa fa-map-marker" aria-hidden="true"></i><span> Cities-->
+                <!--        </span></a></li>-->
+                <!--<li class="col-lg-2 col-md-3 col-6"><a href="{{ route('edit.site.setting') }}"-->
+                <!--        class="waves-effect waves-light"><i class="icon-wrench"></i><span> Site Settings </span></a></li>-->
             </ul>
 
 

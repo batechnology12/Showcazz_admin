@@ -538,6 +538,147 @@ class ChatController extends Controller
             ], 500);
         }
     }
+    
+    
+    
+    /**
+     * Check or get chat session with a specific user
+     */
+    public function getOrCheckChatWithUser(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            $validator = Validator::make($request->all(), [
+                'user_id' => 'required',
+                'chat_type' => 'nullable|string|in:general,job_application,worth_discussing',
+            ]);
+    
+            if ($validator->fails()) {
+                $errors = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $errors[$field] = $messages[0];
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => (object)$errors
+                ], 422);
+            }
+    
+            $targetUserId = $request->user_id;
+            $chatType = $request->chat_type ?? 'general';
+    
+            // Get target user data
+            $targetUserData = $this->getEntityData($targetUserId);
+            if (!$targetUserData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'errors' => (object)['user_id' => 'User not found']
+                ], 404);
+            }
+    
+            // Get chat type model
+            $chatTypeModel = ChatType::where('slug', $chatType)->first();
+            if (!$chatTypeModel) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid chat type',
+                    'errors' => (object)['chat_type' => 'Chat type not found']
+                ], 404);
+            }
+    
+            // Check if a chat session exists between these two users
+            $existingSession = ChatSession::where(function($query) use ($user, $targetUserId, $chatTypeModel) {
+                    $query->where('user1_id', $user->id)
+                          ->where('user2_id', $targetUserId)
+                          ->where('chat_type_id', $chatTypeModel->id);
+                })
+                ->orWhere(function($query) use ($user, $targetUserId, $chatTypeModel) {
+                    $query->where('user1_id', $targetUserId)
+                          ->where('user2_id', $user->id)
+                          ->where('chat_type_id', $chatTypeModel->id);
+                })
+                ->where('is_active', true)
+                ->with(['messages' => function($q) {
+                    $q->orderBy('created_at', 'desc')->limit(1);
+                }])
+                ->first();
+    
+            // If chat exists, return the session details
+            if ($existingSession) {
+                // Get last message
+                $lastMessage = $existingSession->messages->first();
+                
+                // Get unread count for current user
+                $unreadCount = UserMessage::where('chat_session_id', $existingSession->id)
+                    ->where('to_id', $user->id)
+                    ->where('is_read', false)
+                    ->count();
+    
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Existing chat found',
+                    'data' => [
+                        'has_chat' => true,
+                        'chat_session' => [
+                            'session_id' => $existingSession->id,
+                            'chat_type' => [
+                                'id' => $chatTypeModel->id,
+                                'name' => $chatTypeModel->name,
+                                'slug' => $chatTypeModel->slug,
+                            ],
+                            'other_user' => $targetUserData,
+                            'last_message' => $lastMessage ? [
+                                'id' => $lastMessage->id,
+                                'message' => Str::limit($lastMessage->message_txt, 100),
+                                'created_at' => $lastMessage->created_at,
+                                'created_at_formatted' => $lastMessage->created_at->diffForHumans(),
+                            ] : null,
+                            'unread_count' => $unreadCount,
+                            'created_at' => $existingSession->created_at,
+                            'updated_at' => $existingSession->updated_at,
+                        ],
+                        'can_initiate' => false,
+                    ]
+                ]);
+            }
+    
+            // No chat exists - return that user can initiate a new chat
+            return response()->json([
+                'success' => true,
+                'message' => 'No existing chat found',
+                'data' => [
+                    'has_chat' => false,
+                    'can_initiate' => true,
+                    'other_user' => $targetUserData,
+                    'chat_type' => [
+                        'id' => $chatTypeModel->id,
+                        'name' => $chatTypeModel->name,
+                        'slug' => $chatTypeModel->slug,
+                    ],
+                    'suggestions' => [
+                        'You can start a new conversation with this user',
+                        'Click the chat button to send your first message',
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            Log::error('Check chat with user failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+    
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check chat status',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
 
     /**
      * Send message in existing chat
@@ -824,7 +965,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Get user's conversations
+     * Get user's conversations - WITH all_job_woth filter
      */
     public function getConversations(Request $request)
     {
@@ -834,7 +975,8 @@ class ChatController extends Controller
             $validator = Validator::make($request->all(), [
                 'page' => 'nullable|integer|min:1',
                 'per_page' => 'nullable|integer|min:1|max:50',
-                'chat_type' => 'nullable|in:general,job_application,worth_discussing'
+                'chat_type' => 'nullable|string|in:all,general,job_application,worth_discussing,all_job_woth',
+                'search' => 'nullable|string|min:1|max:255',
             ]);
 
             if ($validator->fails()) {
@@ -852,6 +994,8 @@ class ChatController extends Controller
 
             $perPage = $request->per_page ?? 20;
             $page = $request->page ?? 1;
+            $chatType = $request->chat_type;
+            $searchTerm = $request->search;
 
             // Build query for chat sessions
             $query = ChatSession::with([
@@ -870,20 +1014,72 @@ class ChatController extends Controller
                       ->orWhere('user2_id', $user->id);
             });
 
-            // Filter by chat type if specified
-            if ($request->chat_type) {
-                $chatType = ChatType::where('slug', $request->chat_type)->first();
-                if ($chatType) {
-                    $query->where('chat_type_id', $chatType->id);
+            // Apply chat type filter
+            if ($chatType) {
+                if ($chatType === 'all') {
+                    // No filter - show all conversations including general
+                    // Do nothing
+                } elseif ($chatType === 'all_job_woth') {
+                    // Show ONLY job_application AND worth_discussing (exclude general)
+                    $chatTypeIds = ChatType::whereIn('slug', ['job_application', 'worth_discussing'])
+                        ->pluck('id')
+                        ->toArray();
+                    
+                    if (!empty($chatTypeIds)) {
+                        $query->whereIn('chat_type_id', $chatTypeIds);
+                    }
+                } elseif ($chatType === 'general' || $chatType === 'job_application' || $chatType === 'worth_discussing') {
+                    // Single chat type filter
+                    $chatTypeModel = ChatType::where('slug', $chatType)->first();
+                    if ($chatTypeModel) {
+                        $query->where('chat_type_id', $chatTypeModel->id);
+                    }
                 }
             }
 
-            // Get conversations with pagination
-            $conversations = $query->orderBy('last_message_at', 'desc')
-                                 ->paginate($perPage, ['*'], 'page', $page);
+            // Get all conversations (for search filtering)
+            $allConversations = $query->orderBy('last_message_at', 'desc')->get();
+
+            // Apply global search if provided
+            if ($searchTerm) {
+                $filteredConversations = $allConversations->filter(function ($session) use ($user, $searchTerm) {
+                    $otherUser = $this->getOtherUserInSession($session, $user->id);
+                    
+                    if (!$otherUser) {
+                        return false;
+                    }
+                    
+                    // Get other user data
+                    $otherUserData = $this->getEntityData($otherUser->id);
+                    
+                    if (!$otherUserData) {
+                        return false;
+                    }
+                    
+                    $searchTermLower = strtolower($searchTerm);
+                    
+                    // Search in name
+                    $nameMatch = stripos($otherUserData['name'], $searchTermLower) !== false;
+                    
+                    // Search in user type (student, professional, company)
+                    $typeMatch = stripos($otherUserData['usertype'], $searchTermLower) !== false;
+                    
+                    // Also search in email
+                    $emailMatch = isset($otherUserData['email']) && stripos($otherUserData['email'], $searchTermLower) !== false;
+                    
+                    return $nameMatch || $typeMatch || $emailMatch;
+                })->values();
+            } else {
+                $filteredConversations = $allConversations;
+            }
+
+            // Manual pagination
+            $total = $filteredConversations->count();
+            $offset = ($page - 1) * $perPage;
+            $paginatedConversations = $filteredConversations->slice($offset, $perPage)->values();
 
             // Format conversations
-            $formattedConversations = $conversations->map(function ($session) use ($user) {
+            $formattedConversations = $paginatedConversations->map(function ($session) use ($user) {
                 return $this->formatChatSessionResponse($session, $user);
             });
 
@@ -911,10 +1107,14 @@ class ChatController extends Controller
                         'unread_by_type' => $unreadByType
                     ],
                     'pagination' => [
-                        'current_page' => $conversations->currentPage(),
-                        'per_page' => $conversations->perPage(),
-                        'total' => $conversations->total(),
-                        'last_page' => $conversations->lastPage()
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => $total,
+                        'last_page' => ceil($total / $perPage),
+                    ],
+                    'filters' => [
+                        'chat_type' => $chatType ?? 'all',
+                        'search' => $searchTerm,
                     ]
                 ]
             ]);
@@ -928,6 +1128,124 @@ class ChatController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve conversations',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+
+    /**
+     * Search users for new conversations (separate route)
+     */
+    public function searchUsersForChat(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            $validator = Validator::make($request->all(), [
+                'search' => 'required|string|min:1|max:255',
+                'limit' => 'nullable|integer|min:1|max:50',
+            ]);
+
+            if ($validator->fails()) {
+                $errors = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $errors[$field] = $messages[0];
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => (object)$errors
+                ], 422);
+            }
+
+            $searchTerm = $request->search;
+            $limit = $request->limit ?? 20;
+
+            // Get existing conversations to exclude
+            $existingChatUserIds = ChatSession::where(function($q) use ($user) {
+                    $q->where('user1_id', $user->id)
+                      ->orWhere('user2_id', $user->id);
+                })
+                ->get()
+                ->map(function($session) use ($user) {
+                    return $session->user1_id == $user->id ? $session->user2_id : $session->user1_id;
+                })
+                ->toArray();
+
+            // Add current user to exclude list
+            $existingChatUserIds[] = $user->id;
+
+            // Search in users table
+            $users = User::where('is_active', 1)
+                ->whereNotIn('id', $existingChatUserIds)
+                ->where(function($q) use ($searchTerm) {
+                    $q->where('first_name', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('last_name', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('name', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('email', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('usertype', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('headline', 'ILIKE', "%{$searchTerm}%");
+                })
+                ->limit($limit)
+                ->get()
+                ->map(function($userResult) {
+                    return [
+                        'id' => $userResult->id,
+                        'name' => trim(($userResult->first_name ?? '') . ' ' . ($userResult->last_name ?? '')) ?: $userResult->name,
+                        'email' => $userResult->email,
+                        'usertype' => $userResult->usertype ?? 'user',
+                        'image' => $userResult->image ? asset('user_images/' . $userResult->image) : null,
+                        'headline' => $userResult->headline,
+                        'entity_type' => 'user',
+                    ];
+                });
+
+            // Search in companies table
+            $companies = Company::where('is_active', 1)
+                ->whereNotIn('id', $existingChatUserIds)
+                ->where(function($q) use ($searchTerm) {
+                    $q->where('name', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('email', 'ILIKE', "%{$searchTerm}%")
+                      ->orWhere('description', 'ILIKE', "%{$searchTerm}%");
+                })
+                ->limit($limit)
+                ->get()
+                ->map(function($company) {
+                    return [
+                        'id' => $company->id,
+                        'name' => $company->name,
+                        'email' => $company->email,
+                        'usertype' => 'company',
+                        'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                        'headline' => $company->description,
+                        'entity_type' => 'company',
+                        'slug' => $company->slug,
+                    ];
+                });
+
+            // Combine and sort results
+            $results = $users->concat($companies)->sortBy('name')->values();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Users retrieved successfully',
+                'data' => [
+                    'results' => $results->take($limit),
+                    'total' => $results->count(),
+                    'search_term' => $searchTerm,
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('User search failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to search users',
                 'errors' => (object)['server' => 'An error occurred']
             ], 500);
         }
@@ -1223,68 +1541,233 @@ class ChatController extends Controller
     /**
      * Helper: Format chat session response
      */
-    private function formatChatSessionResponse($session, $currentUser)
-    {
-        $otherUser = $this->getOtherUserInSession($session, $currentUser->id);
-        $lastMessage = $session->messages->first();
+    // private function formatChatSessionResponse($session, $currentUser)
+    // {
+    //     $otherUser = $this->getOtherUserInSession($session, $currentUser->id);
+    //     $lastMessage = $session->messages->first();
         
-        // Get other user data from both tables
-        $otherUserData = $otherUser ? $this->getEntityData($otherUser->id) : null;
+    //     // Get other user data from both tables
+    //     $otherUserData = $otherUser ? $this->getEntityData($otherUser->id) : null;
         
-        $formatted = [
-            'session_id' => $session->id,
-            'other_user' => $otherUserData ? [
-                'id' => $otherUserData['id'],
-                'name' => $otherUserData['name'],
-                'email' => $otherUserData['email'],
-                'image' => $otherUserData['image'],
-                'usertype' => $otherUserData['usertype'],
-                'entity_type' => $otherUserData['entity_type']
-            ] : null,
-            'unread_count' => $session->unread_count,
-            'last_message_at' => $session->last_message_at,
-            'created_at' => $session->created_at,
-            'is_active' => $session->is_active
+    //     $formatted = [
+    //         'session_id' => $session->id,
+    //         'other_user' => $otherUserData ? [
+    //             'id' => $otherUserData['id'],
+    //             'name' => $otherUserData['name'],
+    //             'email' => $otherUserData['email'],
+    //             'image' => $otherUserData['image'],
+    //             'usertype' => $otherUserData['usertype'],
+    //             'entity_type' => $otherUserData['entity_type']
+    //         ] : null,
+    //         'unread_count' => $session->unread_count,
+    //         'last_message_at' => $session->last_message_at,
+    //         'last_message' => $session->last_message,
+    //         'created_at' => $session->created_at,
+    //         'is_active' => $session->is_active
+    //     ];
+
+    //     // Add post info if available
+    //     if ($session->post) {
+    //         $formatted['post'] = [
+    //             'id' => $session->post->id,
+    //             'title' => $session->post->title,
+    //             'content' => $session->post->content,
+    //             'stipend_amount' => $session->post->stipend_amount,
+    //             'is_job_post' => $session->post->is_job_post
+    //         ];
+    //     }
+
+    //     // Add chat type info
+    //     if ($session->chatType) {
+    //         $formatted['chat_type'] = [
+    //             'id' => $session->chatType->id,
+    //             'name' => $session->chatType->name,
+    //             'slug' => $session->chatType->slug
+    //         ];
+    //     }
+
+    //     // Add worth discussing point info if available
+    //     if ($session->worthDiscussingPoint) {
+    //         $formatted['worth_discussing_point'] = [
+    //             'id' => $session->worthDiscussingPoint->id,
+    //             'title' => $session->worthDiscussingPoint->title
+    //         ];
+    //     }
+
+    //     // Add last message preview
+    //     if ($lastMessage) {
+    //         $formatted['last_message'] = [
+    //             'id' => $lastMessage->id,
+    //             'message' => Str::limit($lastMessage->message_txt, 100),
+    //             'is_sender' => $lastMessage->from_id == $currentUser->id,
+    //             'created_at' => $lastMessage->created_at
+    //         ];
+    //     }
+
+    //     return $formatted;
+    // }
+    
+    
+    /**
+ * Helper: Format chat session response - WITH COMPLETE JOB DETAILS
+ */
+private function formatChatSessionResponse($session, $currentUser)
+{
+    $otherUser = $this->getOtherUserInSession($session, $currentUser->id);
+    $lastMessage = $session->messages->first();
+    
+    // Get other user data from both tables
+    $otherUserData = $otherUser ? $this->getEntityData($otherUser->id) : null;
+    
+    $formatted = [
+        'session_id' => $session->id,
+        'other_user' => $otherUserData ? [
+            'id' => $otherUserData['id'],
+            'name' => $otherUserData['name'],
+            'email' => $otherUserData['email'],
+            'image' => $otherUserData['image'],
+            'usertype' => $otherUserData['usertype'],
+            'entity_type' => $otherUserData['entity_type']
+        ] : null,
+        'unread_count' => $session->unread_count,
+        'last_message_at' => $session->last_message_at,
+        'last_message' => $session->last_message,
+        'created_at' => $session->created_at,
+        'is_active' => $session->is_active
+    ];
+
+    // Add detailed post info if available
+    if ($session->post) {
+        $post = $session->post;
+        
+        // Parse skills required
+        $skillsRequired = [];
+        if ($post->skills_required) {
+            if (is_array($post->skills_required)) {
+                $skillIds = $post->skills_required;
+            } else {
+                $skillIds = json_decode($post->skills_required, true) ?: [];
+            }
+            
+            if (!empty($skillIds)) {
+                $skills = \App\JobSkill::whereIn('id', $skillIds)
+                    ->where('is_active', 1)
+                    ->get(['id', 'job_skill']);
+                
+                $skillsRequired = $skills->map(function($skill) {
+                    return [
+                        'id' => $skill->id,
+                        'name' => $skill->job_skill
+                    ];
+                })->toArray();
+            }
+        }
+
+        // Parse tech stack
+        $techStack = [];
+        if ($post->tech_stack) {
+            if (is_array($post->tech_stack)) {
+                $techStack = $post->tech_stack;
+            } else {
+                $techStack = json_decode($post->tech_stack, true) ?: [];
+            }
+        }
+
+        // Parse images
+        $images = [];
+        if ($post->images) {
+            if (is_array($post->images)) {
+                $images = array_map(function($img) {
+                    return asset('post_images/' . $img);
+                }, $post->images);
+            } else {
+                $images = array_map(function($img) {
+                    return asset('post_images/' . $img);
+                }, json_decode($post->images, true) ?: []);
+            }
+        }
+
+        $formatted['post'] = [
+            'id' => $post->id,
+            'title' => $post->title,
+            'content' => $post->content,
+            'short_description' => $post->short_description,
+            'images' => $images,
+            'category_id' => $post->category_id,
+            'subcategory_id' => $post->subcategory_id,
+            'is_job_post' => $post->is_job_post ?? ($post->category_id == 5 || $post->category_id == 6),
+            'created_at' => $post->created_at,
+            'author_id' => $post->user_id,
         ];
 
-        // Add post info if available
-        if ($session->post) {
-            $formatted['post'] = [
-                'id' => $session->post->id,
-                'title' => $session->post->title,
-                'is_job_post' => $session->post->is_job_post
+        // Add job-specific fields based on category
+        if ($post->category_id == 5 || $post->category_id == 6) {
+            $formatted['post']['job_details'] = [
+                'role_type' => $post->role_type,
+                'work_mode' => $post->work_mode,
+                'key_deliverables' => $post->key_deliverables,
+                'experience_required' => $post->experience_required,
+                'skills_required' => $skillsRequired,
+                'tech_stack' => $techStack,
+                'benefits' => $post->benefits,
+                'salary_range' => $post->salary_range,
+                'company_name' => $post->company_name,
+                'job_location' => $post->job_location,
+                'application_url' => $post->application_url,
+                'application_deadline' => $post->application_deadline,
+                'application_deadline_formatted' => $post->application_deadline ? 
+                    \Carbon\Carbon::parse($post->application_deadline)->format('d M Y') : null,
+                'is_expired' => $post->application_deadline ? 
+                    \Carbon\Carbon::parse($post->application_deadline)->isPast() : false,
             ];
-        }
 
-        // Add chat type info
-        if ($session->chatType) {
-            $formatted['chat_type'] = [
-                'id' => $session->chatType->id,
-                'name' => $session->chatType->name,
-                'slug' => $session->chatType->slug
-            ];
+            // Add category-specific fields
+            if ($post->category_id == 5) { // Mini Mission
+                $formatted['post']['job_details']['deliverables'] = $post->deliverables;
+                $formatted['post']['job_details']['timeline_start'] = $post->timeline_start;
+                $formatted['post']['job_details']['timeline_end'] = $post->timeline_end;
+                $formatted['post']['job_details']['type'] = 'mini_mission';
+                $formatted['post']['job_details']['type_label'] = 'Mini Mission';
+            } elseif ($post->category_id == 6) { // Internship
+                $formatted['post']['job_details']['stipend_amount'] = $post->stipend_amount;
+                $formatted['post']['job_details']['stipend_currency'] = $post->stipend_currency;
+                $formatted['post']['job_details']['convertible_to_full_time'] = $post->convertible_to_full_time;
+                $formatted['post']['job_details']['internship_duration'] = $post->internship_duration;
+                $formatted['post']['job_details']['type'] = 'internship';
+                $formatted['post']['job_details']['type_label'] = 'Internship';
+            }
         }
-
-        // Add worth discussing point info if available
-        if ($session->worthDiscussingPoint) {
-            $formatted['worth_discussing_point'] = [
-                'id' => $session->worthDiscussingPoint->id,
-                'title' => $session->worthDiscussingPoint->title
-            ];
-        }
-
-        // Add last message preview
-        if ($lastMessage) {
-            $formatted['last_message'] = [
-                'id' => $lastMessage->id,
-                'message' => Str::limit($lastMessage->message_txt, 100),
-                'is_sender' => $lastMessage->from_id == $currentUser->id,
-                'created_at' => $lastMessage->created_at
-            ];
-        }
-
-        return $formatted;
     }
+
+    // Add chat type info
+    if ($session->chatType) {
+        $formatted['chat_type'] = [
+            'id' => $session->chatType->id,
+            'name' => $session->chatType->name,
+            'slug' => $session->chatType->slug
+        ];
+    }
+
+    // Add worth discussing point info if available
+    if ($session->worthDiscussingPoint) {
+        $formatted['worth_discussing_point'] = [
+            'id' => $session->worthDiscussingPoint->id,
+            'title' => $session->worthDiscussingPoint->title
+        ];
+    }
+
+    // Add last message preview
+    if ($lastMessage) {
+        $formatted['last_message'] = [
+            'id' => $lastMessage->id,
+            'message' => Str::limit($lastMessage->message_txt, 100),
+            'is_sender' => $lastMessage->from_id == $currentUser->id,
+            'created_at' => $lastMessage->created_at
+        ];
+    }
+
+    return $formatted;
+}
 
     /**
      * Helper: Get other user in chat session
