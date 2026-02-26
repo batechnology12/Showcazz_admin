@@ -1390,7 +1390,7 @@ class RegisterController extends Controller
     {
         $fields = $user instanceof \App\Company
             ? ['name','unique_id','visibility_control','email','description','website','logo']
-            : ['first_name','email','visibility_control','college_name','school_name','degree','headline','image'];
+            : ['first_name','email','visibility_control','college_name','school_name','degree','image'];
 
         $completed = 0;
 

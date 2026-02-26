@@ -173,8 +173,7 @@ class ForgotPasswordController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
-                'current_password' => 'required|string',
-                'password' => 'required|string|min:8|confirmed|different:current_password',
+                'password' => 'required|string|min:8|confirmed',
                 'password_confirmation' => 'required|string|min:8',
             ]);
     
@@ -192,7 +191,6 @@ class ForgotPasswordController extends Controller
             }
     
             $email = $request->email;
-            $currentPassword = $request->current_password;
             $newPassword = $request->password;
     
             // Find user/company
@@ -209,28 +207,6 @@ class ForgotPasswordController extends Controller
                 ], 404);
             }
     
-            // Validate current password
-            if ($user) {
-                if (!Hash::check($currentPassword, $user->password)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Current password is incorrect',
-                        'errors' => (object)[
-                            'current_password' => 'Current password is incorrect'
-                        ]
-                    ], 401);
-                }
-            } else {
-                if (!Hash::check($currentPassword, $company->password)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Current password is incorrect',
-                        'errors' => (object)[
-                            'current_password' => 'Current password is incorrect'
-                        ]
-                    ], 401);
-                }
-            }
     
             // Update password
             if ($user) {

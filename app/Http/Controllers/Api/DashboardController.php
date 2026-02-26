@@ -527,12 +527,34 @@ class DashboardController extends Controller
 
         if ($request->search) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+
+            $query->where(function ($q) use ($search) {
+
+                // Post fields
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('content', 'like', "%{$search}%")
-                  ->orWhere('short_description', 'like', "%{$search}%");
+                ->orWhere('content', 'like', "%{$search}%")
+                ->orWhere('short_description', 'like', "%{$search}%");
+
+                // Category name
+                $q->orWhereHas('category', function ($cat) use ($search) {
+                    $cat->where('name', 'like', "%{$search}%");
+                });
+
+                // Subcategory name
+                $q->orWhereHas('subcategory', function ($sub) use ($search) {
+                    $sub->where('name', 'like', "%{$search}%");
+                });
+
+                // User name
+                $q->orWhereHas('user', function ($user) use ($search) {
+                    $user->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                });
+
             });
         }
+
 
         if ($request->category_id) {
             $query->where('category_id', $request->category_id);
