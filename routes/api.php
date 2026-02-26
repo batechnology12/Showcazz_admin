@@ -89,8 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
     //auth
     Route::post('/logout', [RegisterController::class, 'logout']);
     Route::get('/profile', [RegisterController::class, 'profile']);
+    Route::post('/changePassword', [RegisterController::class, 'changePassword']);
     Route::get('/profileAlldetails', [RegisterController::class, 'profileAlldetails']);
-    
     
     Route::get('/profile/edit', [RegisterController::class, 'getEditProfileData']);
     Route::post('/profile/update', [RegisterController::class, 'updateProfile']);

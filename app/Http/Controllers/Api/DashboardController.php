@@ -475,7 +475,7 @@ class DashboardController extends Controller
     {
         $perPage = $request->per_page ?? 20;
         $page = $request->page ?? 1;
-        $shuffle = $request->shuffle ?? true;
+        $shuffle = $request->shuffle ?? false;
         
         // Get all users and companies with their visibility settings
         $publicUserIds = User::where('visibility_control', 'public')
@@ -496,6 +496,7 @@ class DashboardController extends Controller
         ])
         ->withCount(['likes', 'comments', 'shares', 'views'])
         ->where('is_active', true)
+        ->where('post_type_id', 1)
         ->where('is_published', true);
 
         // Apply visibility control
@@ -546,11 +547,31 @@ class DashboardController extends Controller
                 });
 
                 // User name
-                $q->orWhereHas('user', function ($user) use ($search) {
-                    $user->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                // $q->orWhereHas('user', function ($user) use ($search) {
+                //     $user->where('first_name', 'like', "%{$search}%")
+                //         ->orWhere('last_name', 'like', "%{$search}%")
+                //         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                // });
+
+
+                 // User name search
+                $q->orWhereIn('user_id', function ($subQuery) use ($search) {
+                    $subQuery->select('id')
+                        ->from('users')
+                        ->where(function ($userQuery) use ($search) {
+                            $userQuery->where('first_name', 'ILIKE', "%{$search}%")
+                                ->orWhere('last_name', 'ILIKE', "%{$search}%")
+                                ->orWhereRaw("CONCAT(first_name, ' ', last_name) ILIKE ?", ["%{$search}%"]);
+                        });
                 });
+
+                // Company name search
+                $q->orWhereIn('user_id', function ($subQuery) use ($search) {
+                    $subQuery->select('id')
+                        ->from('companies')
+                        ->where('description', 'ILIKE', "%{$search}%");
+                });
+                
 
             });
         }

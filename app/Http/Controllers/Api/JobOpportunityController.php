@@ -233,7 +233,7 @@ class JobOpportunityController extends Controller
             ],
             'author' => $authorData ? [
                 'id' => $authorData['id'],
-                'name' => $authorData['name'],
+                'name' => $authorData['description'] ?? $authorData['name'],
                 'usertype' => $authorData['usertype'],
                 'image' => $authorData['image'],
                 'location' => $authorData['location'] ?? null,
