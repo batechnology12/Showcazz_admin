@@ -11,6 +11,7 @@ use App\PostTag;
 use App\PostLike;
 use App\PostComment;
 use App\PostShare;
+use App\UserMessage;
 use App\PostView;
 use App\Models\PostRepost;
 use App\User;
@@ -1963,6 +1964,22 @@ class PostController extends Controller
             'original_post_id' => $post->original_post_id,
         ];
     
+
+               // Check if already applied
+                $existingApplication = UserMessage::where('listing_id', $post->id)
+                ->where('from_id', $user->id)
+                ->where('chat_type_id', function($query) {
+                    $query->select('id')->from('chat_types')->where('slug', 'job_application');
+                })
+                ->exists();
+
+            if ($existingApplication) {
+                $formatted['already_applied'] = true;
+            }else{
+                $formatted['already_applied'] = false;  
+            }
+
+
         // Prepare all fields with skills_required now containing names
         $allFields = [
             // Project fields

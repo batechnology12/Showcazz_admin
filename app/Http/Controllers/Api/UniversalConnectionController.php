@@ -387,11 +387,20 @@ class UniversalConnectionController extends Controller
                             
                         case 'accept':
                             // Companies don't have accept/reject for follows
-                            throw new Exception('Companies cannot accept/reject follow requests');
+                            //throw new Exception('Companies cannot accept/reject follow requests');
+                             $result = $this->acceptFollowRequest($currentUser->id, $targetId);
+                             $message = 'Accepted follow request from ' . $company->name;
+                             break;
                             
                         case 'reject':
                             // Companies don't have accept/reject for follows
-                            throw new Exception('Companies cannot accept/reject follow requests');
+                            //throw new Exception('Companies cannot accept/reject follow requests');
+
+                            $result = $this->rejectFollowRequest($currentUser->id, $targetId);
+                            $message = 'Rejected follow request from ' . $company->name;
+                            break;
+                          
+
                             
                         case 'block':
                             $result = $this->blockCompany($currentUser->id, $targetId, $reason);
@@ -461,8 +470,21 @@ class UniversalConnectionController extends Controller
                 ->with(['following:id,first_name,usertype,headline,image'])
                 ->get()
                 ->map(function ($conn) {
-                    $enrichedData = $this->getEnrichedUserData($conn->following);
+                    //$enrichedData = $this->getEnrichedUserData($conn->following);
                     
+                    $requester = $this->getEntityById($conn->following_id);
+                    
+                    if (!$requester) {
+                        return null;
+                    }
+                    
+                    $enrichedData = $this->getEnrichedEntityData($requester);
+                    
+                    if (!$enrichedData) {
+                        return null;
+                    }
+                    
+
                     return array_merge($enrichedData, [
                         'entity_type' => 'user',
                         'connection_type' => 'following',
@@ -476,7 +498,21 @@ class UniversalConnectionController extends Controller
                 ->with(['follower:id,first_name,usertype,headline,image'])
                 ->get()
                 ->map(function ($conn) {
-                    $enrichedData = $this->getEnrichedUserData($conn->follower);
+
+                    $requester = $this->getEntityById($conn->follower_id);
+                    
+                    if (!$requester) {
+                        return null;
+                    }
+                    
+                    $enrichedData = $this->getEnrichedEntityData($requester);
+                    
+                    if (!$enrichedData) {
+                        return null;
+                    }
+                    
+
+                    //$enrichedData = $this->getEnrichedUserData($conn->follower);
                     
                     return array_merge($enrichedData, [
                         'entity_type' => 'user',
@@ -527,6 +563,87 @@ class UniversalConnectionController extends Controller
         }
     }
     
+
+        private function getEntityById($id)
+    {
+        if (!$id) {
+            return null;
+        }
+        
+        $user = User::find($id);
+        if ($user) {
+            return $user;
+        }
+        
+        $company = Company::find($id);
+        if ($company) {
+            return $company;
+        }
+        
+        return null;
+    }
+
+
+        private function getEnrichedEntityData($entity)
+    {
+        if (!$entity) {
+            return null;
+        }
+
+        if ($entity instanceof Company) {
+            return [
+                'id' => $entity->id,
+                'name' => $entity->name ?? 'Unknown Company',
+                'email' => $entity->email ?? null,
+                'usertype' => 'company',
+                'headline' => $entity->description ?? null,
+                'image' => $entity->logo ? asset('company_logos/' . $entity->logo) : null,
+                'slug' => $entity->slug ?? null,
+                'visibility_control' => $entity->visibility_control ?? 'public',
+                'entity_type' => 'company',
+            ];
+        }
+
+        if ($entity instanceof User) {
+            if ($entity->usertype === 'company') {
+                $company = Company::where('user_id', $entity->id)->first();
+                if ($company) {
+                    return [
+                        'id' => $company->id,
+                        'name' => $company->name,
+                        'email' => $company->email ?? $entity->email,
+                        'usertype' => 'company',
+                        'headline' => $company->description,
+                        'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                        'slug' => $company->slug,
+                        'visibility_control' => $company->visibility_control ?? 'public',
+                        'entity_type' => 'company',
+                    ];
+                }
+            }
+
+            $firstName = $entity->first_name ?? '';
+            $lastName = $entity->last_name ?? '';
+            $name = trim($firstName . ' ' . $lastName);
+            $name = $name ?: ($entity->name ?? 'Unknown User');
+
+            return [
+                'id' => $entity->id,
+                'name' => $name,
+                'email' => $entity->email ?? null,
+                'usertype' => $entity->usertype ?? 'user',
+                'headline' => $entity->headline ?? null,
+                'image' => $entity->image ? asset('user_images/' . $entity->image) : null,
+                'slug' => null,
+                'visibility_control' => $entity->visibility_control ?? 'public',
+                'entity_type' => 'user',
+            ];
+        }
+
+        return null;
+    }
+
+
     public function getAllConnections_with_profile(Request $request)
     {
         try {

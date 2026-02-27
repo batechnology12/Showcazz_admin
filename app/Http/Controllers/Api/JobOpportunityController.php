@@ -838,10 +838,10 @@ class JobOpportunityController extends Controller
                     });
 
                 // Determine application status
-                $status = 'pending';
+                $status = 'Applied';
                 $lastMessage = $chatMessages->last();
                 if ($lastMessage && $lastMessage['is_from_me'] == false) {
-                    $status = 'under_review';
+                    $status = 'viewed';
                 }
 
                 // Parse JSON data if available

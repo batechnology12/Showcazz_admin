@@ -928,7 +928,7 @@ class ChatController extends Controller
                 ]);
 
             // Reset unread count for this session
-            $chatSession->update(['unread_count' => 0]);
+            //$chatSession->update(['unread_count' => 0]);
 
             // Format messages
             $formattedMessages = $messages->map(function ($message) use ($user) {
@@ -1078,10 +1078,10 @@ class ChatController extends Controller
             $offset = ($page - 1) * $perPage;
             $paginatedConversations = $filteredConversations->slice($offset, $perPage)->values();
 
-            // Format conversations
-            $formattedConversations = $paginatedConversations->map(function ($session) use ($user) {
-                return $this->formatChatSessionResponse($session, $user);
-            });
+                // Format conversations
+                $formattedConversations = $paginatedConversations->map(function ($session) use ($user) {
+                    return $this->formatChatSessionResponse($session, $user);
+                });
 
             // Get total unread count
             $totalUnread = UserMessage::where('to_id', $user->id)

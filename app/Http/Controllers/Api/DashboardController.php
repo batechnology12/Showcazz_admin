@@ -1164,6 +1164,22 @@ class DashboardController extends Controller
             'tags' => $tags,
             'stats' => $stats,
             'author' => $authorData,
+            'tagged_users' => $post->taggedUsers->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name ?? trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                    'usertype' => $user->usertype,
+                    'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                ];
+            }),
+            'tagged_companies' => $post->taggedCompanies->map(function ($company) {
+                return [
+                    'id' => $company->id,
+                    'name' => $company->name,
+                    'slug' => $company->slug,
+                    'logo' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                ];
+            }),
             'visibility_info' => [
                 'author_visibility' => $authorData['visibility_control'],
                 'is_visible' => $this->canViewPost($currentUser, $authorData['id'], $this->getUserConnections($currentUser)),

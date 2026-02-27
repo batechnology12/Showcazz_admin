@@ -20,23 +20,41 @@ use Illuminate\Support\Facades\DB;
 class RegisterController extends Controller
 {
 
-    private function generateUniqueId($type = 'user')
+    private function generateUniqueId($type = 'user', $email = null)
     {
-        $prefix = 'SCHWZ';
+        // 1️⃣ Extract name from email (before @)
+        $emailName = $email ? explode('@', $email)[0] : 'USR';
+
+        // Remove special characters and numbers
+        $cleanName = strtoupper(preg_replace('/[^A-Za-z]/', '', $emailName));
+
+        // Take first 3 letters
+        $namePart = substr($cleanName, 0, 3);
+        $namePart = str_pad($namePart, 3, 'X'); // If less than 3 letters
+
+        // 2️⃣ Determine type letter
         if ($type === 'company') {
             $latest = Company::orderBy('id', 'desc')->first();
-        } 
-        else {
-            $latest = User::orderBy('id', 'desc')->first();
-        }
-        if ($latest && !empty($latest->unique_id)) {
-            $numberPart = substr($latest->unique_id, strlen($prefix));
-            $nextNumber = str_pad((int)$numberPart + 1, 6, '0', STR_PAD_LEFT);
+            $typeLetter = 'C';
         } else {
-            $nextNumber = '000001';
+            $latest = User::orderBy('id', 'desc')->first();
+            $typeLetter = $type === 'professional' ? 'P' : 'S';
         }
-        
-        return $prefix . $nextNumber;
+
+        // 3️⃣ Extract last 4 digit sequence safely
+        if ($latest && !empty($latest->unique_id)) {
+            preg_match('/(\d{4})/', $latest->unique_id, $matches);
+            $lastNumber = isset($matches[1]) ? (int)$matches[1] : 0;
+            $nextNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+        } else {
+            $nextNumber = '0001';
+        }
+
+        // 4️⃣ Random alphabet
+        $randomAlphabet = chr(rand(65, 90)); // A-Z
+
+        // 5️⃣ Final Unique ID
+        return $namePart . $nextNumber . $randomAlphabet . $typeLetter;
     }
 
 
@@ -73,7 +91,7 @@ class RegisterController extends Controller
                     'name' => '', // Will be updated later
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
-                    'unique_id' => $this->generateUniqueId('company'),
+                    'unique_id' => $this->generateUniqueId('company',$request->email),
                     'visibility_control' => 'public', // Default
                     'slug' => Str::random(10) . '-' . time(), // Temporary slug
                     'is_active' => 1,
@@ -109,7 +127,7 @@ class RegisterController extends Controller
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
                     'usertype' => $userType,
-                    'unique_id' => $this->generateUniqueId('user'),
+                    'unique_id' => $this->generateUniqueId($userType, $request->email),
                     'visibility_control' => 'public', // Default
                     'is_active' => 1,
                 ]);
@@ -361,7 +379,12 @@ class RegisterController extends Controller
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'website' => 'nullable|url',
-                'linkedin_url' => 'nullable|url',
+                'linkedin_url' => [
+                'nullable',
+                'url',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?linkedin\.com\/(in|company|school)\/[A-Za-z0-9_-]+\/?$/'
+                 ],
                 'gst_number' => 'nullable|string|max:100',
                 'upi_id' => 'nullable|string|max:100',
                 'visibility_control' => 'sometimes|in:public,private',
@@ -369,6 +392,8 @@ class RegisterController extends Controller
                 'phone' => 'nullable|string|max:10',
                 'location' => 'nullable|string|max:255',
                 'industry_id' => 'nullable|exists:industries,id',
+            ], [
+            'linkedin_url.regex' => 'Please enter a valid LinkedIn profile or company URL.',
             ]);
 
             if ($validator->fails()) {
@@ -736,7 +761,12 @@ class RegisterController extends Controller
             'email' => 'required|email|unique:companies,email,' . $company->id,
             'phone' => 'nullable|string|max:30',
             'website' => 'nullable|url|max:255',
-            'linkedin_url' => 'nullable|url|max:255',
+            'linkedin_url' => [
+                'nullable',
+                'url',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?linkedin\.com\/(in|company|school)\/[A-Za-z0-9_-]+\/?$/'
+            ],
             'description' => 'nullable|string',
             'location' => 'nullable|string|max:255',
             'visibility_control' => 'sometimes|in:public,private',
@@ -753,6 +783,8 @@ class RegisterController extends Controller
             // Images
             'logo' => 'nullable|string', // Base64 or URL
             'remove_logo' => 'nullable|boolean',
+        ], [
+          'linkedin_url.regex' => 'Please enter a valid LinkedIn profile or company URL.',
         ]);
 
         if ($validator->fails()) {
