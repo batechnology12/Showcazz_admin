@@ -29,7 +29,6 @@ Route::get('/skills', [CommonController::class, 'skills']);
 
 Route::post('/sendResetCodeEmail', [ForgotPasswordController::class, 'sendResetCodeEmail']);
  
- 
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::delete('/chat/conversation/{chatSessionId}', [ChatController::class, 'deleteConversation']);
@@ -110,8 +109,6 @@ Route::middleware('auth:api')->group(function () {
 
 
 Route::get('/terms', [StaticPageController::class, 'getTerms']);
-    
-    // Get privacy policy
 Route::get('/privacy', [StaticPageController::class, 'getPrivacy']);
 
 Route::prefix('post-types')->group(function () {
@@ -187,10 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/changePassword', [RegisterController::class, 'changePassword']);
     Route::get('/profileAlldetails', [RegisterController::class, 'profileAlldetails']);
     
-    
     Route::get('/profile/edit', [RegisterController::class, 'getEditProfileData']);
-    Route::post('/profile/update', [RegisterController::class, 'updateProfile']);
-    
     Route::post('/update-profile-picture', [RegisterController::class, 'updateProfilePicture']);
     Route::post('/complete-user-profile', [RegisterController::class, 'completeUserProfile']);
     Route::post('/complete-company-profile', [RegisterController::class, 'completeCompanyProfile']);

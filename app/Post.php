@@ -63,6 +63,7 @@ class Post extends Model
         'views_count',
         'likes_count',
         'comments_count',
+        'repost_count',
         'shares_count',
         'repost_count',
         'is_repost',

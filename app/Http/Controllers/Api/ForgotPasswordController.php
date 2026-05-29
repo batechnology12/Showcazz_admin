@@ -458,7 +458,7 @@ HTML;
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
             ]);
-
+    
             if ($validator->fails()) {
                 $errors = [];
                 foreach ($validator->errors()->toArray() as $field => $messages) {
@@ -471,7 +471,7 @@ HTML;
                     'errors' => (object)$errors
                 ], 422);
             }
-
+    
             $email = $request->email;
             
             // Check if email exists in users table only
@@ -622,7 +622,30 @@ HTML;
                     ]
                 ], 404);
             }
-
+    
+            // Validate current password
+            if ($user) {
+                if (!Hash::check($currentPassword, $user->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Current password is incorrect',
+                        'errors' => (object)[
+                            'current_password' => 'Current password is incorrect'
+                        ]
+                    ], 401);
+                }
+            } else {
+                if (!Hash::check($currentPassword, $company->password)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Current password is incorrect',
+                        'errors' => (object)[
+                            'current_password' => 'Current password is incorrect'
+                        ]
+                    ], 401);
+                }
+            }
+    
             // Update password
             $user->password = Hash::make($newPassword);
             $user->save();
@@ -641,7 +664,7 @@ HTML;
                     'reset' => true
                 ]
             ]);
-
+    
         } catch (Exception $e) {
             Log::error('Reset password failed', [
                 'error' => $e->getMessage(),

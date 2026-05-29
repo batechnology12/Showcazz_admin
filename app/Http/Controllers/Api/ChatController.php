@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\User;
+use App\Company;
 use App\Post;
 use App\UserMessage;
 use App\Models\ChatType;
@@ -1053,6 +1054,16 @@ class ChatController extends Controller
             $user = Auth::user();
             $this->updateLastActivity($user);
             
+            // Get current user entity data
+            $currentUserData = $this->getEntityData($user->id);
+            if (!$currentUserData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'errors' => (object)['user' => 'User not found']
+                ], 404);
+            }
+
             $validator = Validator::make($request->all(), [
                 'user_id' => 'required',
                 'chat_type' => 'nullable|string|in:general,job_application,worth_discussing',

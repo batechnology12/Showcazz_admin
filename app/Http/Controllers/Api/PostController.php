@@ -48,13 +48,8 @@ class PostController extends Controller
         $this->notificationService = app(\App\Services\NotificationService::class);
     }
 
-    // ============================================
-    // POST CREATION METHODS FOR 13 TYPES
-    // ============================================
 
-    /**
-     * Create a new post (handles all 13 types)
-     */
+
     public function createPost(Request $request)
     {
         try {
@@ -112,10 +107,8 @@ class PostController extends Controller
         return $isActive && $hasListings;
     }
 
-    /**
-     * Create regular post (Handles all 13 types including jobs)
-     */
-    private function createRegularPost(Request $request, $user, $isJobPost = false)
+ 
+      private function createRegularPost(Request $request, $user, $isJobPost = false)
     {
         $validator = Validator::make($request->all(), [
             'post_type_id' => 'required|exists:post_types,id',
@@ -135,75 +128,80 @@ class PostController extends Controller
         $categoryId = $request->category_id;
         $subcategoryId = $request->subcategory_id;
         
-        // Category 1: Projects
-        if ($categoryId == 1) {
-            if ($subcategoryId == 1) { // Mini innovation/fun innovation
-                $validator->addRules([
-                    'tech_stack' => 'required|array',
-                    'tech_stack.*' => 'string|max:100',
-                    'idea_or_goal' => 'required|string',
-                    'outcome_or_fun_element' => 'required|string',
-                ]);
-            } elseif ($subcategoryId == 2) { // Real Project
-                $validator->addRules([
-                    'tech_stack' => 'nullable|array',
-                    'tech_stack.*' => 'string|max:100',
-                    'project_domain' => 'required|string|max:255',
-                    'role_in_project' => 'required|string|max:255',
-                    'duration_start' => 'required|date',
-                    'duration_end' => 'required|date|after_or_equal:duration_start',
-                ]);
-            }
-        }
-        // Category 2: Achievements
-        elseif ($categoryId == 2) {
-            if ($subcategoryId == 3) { // Certification
-                $validator->addRules([
-                    'certification_title' => 'required|string|max:255',
-                    'technology_topic' => 'required|string|max:255',
-                ]);
-            } elseif ($subcategoryId == 4) { // Rewards / Recognitions
-                $validator->addRules([
-                    'award_name' => 'required|string|max:255',
-                    'technology_topic' => 'required|string|max:255',
-                ]);
-            } elseif ($subcategoryId == 5) { // Congratulate Someone
-                $validator->addRules([
-                    'occasion_title' => 'required|string|max:255',
-                    'message' => 'required|string',
-                    'technology_topic' => 'nullable|string|max:255',
-                    'tagged_users' => 'required|array|min:1',
-                    'tagged_users.*' => 'exists:users,id',
-                ]);
-            }
-        }
-        // Category 3: Events
-        elseif ($categoryId == 3) {
+        
+		try {
+			$user = Auth::user();
+			
+			// Check if this is a job post (category_id = 5)
+			// if ($request->category_id == 5) {
+			//     return $this->createJobPost($request, $user);
+			// }
+		   
+			return $this->createRegularPost($request, $user);
+
+		} catch (Exception $e) {
+			return response()->json([
+				'success' => false,
+				'message' => 'Failed to create post',
+				'error' => [
+					'message' => $e->getMessage(),
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				]
+			], 500);
+		}
+	}
+
+
+
+    private function createRegularPost(Request $request, $user)
+    {
+     $validator = Validator::make($request->all(), [
+        'post_type_id' => 'required|exists:post_types,id',
+        'category_id' => 'required|exists:categories,id',
+        'subcategory_id' => 'nullable',
+        'title' => 'required|string|max:255',
+        'content' => 'required|string',
+        'short_description' => 'nullable|string|max:500',
+
+        'images' => 'nullable|array',
+        'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:102400',
+
+        'files' => 'nullable|array',
+        'files.*' => 'file|mimes:pdf,doc,docx,txt,zip|max:102400',
+
+        'is_published' => 'boolean',
+    ], [
+
+        // ✅ Custom size messages
+        'images.*.max' => 'Each image must not exceed 100 MB.',
+        'files.*.max'  => 'Each file must not exceed 100 MB.',
+
+        // optional mime messages
+        'images.*.mimes' => 'Images must be jpeg, png, jpg, gif or webp format.',
+        'files.*.mimes'  => 'Files must be pdf, doc, docx, txt or zip.',
+    ]);
+
+    $validator->setAttributeNames([
+        'images.*' => 'Image',
+        'files.*'  => 'File',
+    ]);
+
+    // Additional validation based on category and subcategory
+    $categoryId = $request->category_id;
+    $subcategoryId = $request->subcategory_id;
+    
+    // Category 1: Projects
+    if ($categoryId == 1) {
+        if ($subcategoryId == 1) { // Mini innovation/fun innovation
             $validator->addRules([
                 // 'event_date' => 'nullable|date',
                 // 'event_end_date' => 'nullable|date|after_or_equal:event_date',
                 'technology_topic' => 'required|string|max:255',
             ]);
-            
-            if ($subcategoryId == 6) { // Hosted Event
-                // No additional rules
-            } elseif ($subcategoryId == 7) { // Attended an Event
-                $validator->addRules([
-                    'organizer_id' => 'nullable|exists:users,id',
-                ]);
-            } elseif ($subcategoryId == 8) { // Hackathon
-                $validator->addRules([
-                    'result_rank' => 'nullable|string|max:100',
-                ]);
-            } elseif ($subcategoryId == 9) { // Webinar
-                $validator->addRules([
-                    'host_id' => 'nullable|exists:users,id',
-                ]);
-            }
-        }
-        // Category 4: Knowledge Sharing
-        elseif ($categoryId == 4) {
+        } elseif ($subcategoryId == 4) { // Rewards / Recognitions
             $validator->addRules([
+                'award_name' => 'required|string|max:255',
                 'technology_topic' => 'required|string|max:255',
             ]);
             
@@ -416,31 +414,60 @@ class PostController extends Controller
                 'message' => 'Post created successfully',
                 'data' => $this->formatPostResponse($post)
             ]);
-
-        } catch (Exception $e) {
-            DB::rollBack();
-            
-            // Clean up uploaded files if post creation failed
-            if (!empty($imagePaths)) {
-                foreach ($imagePaths as $imagePath) {
-                    @unlink(public_path('post_images/' . $imagePath));
-                }
-            }
-            if (!empty($filePaths)) {
-                foreach ($filePaths as $filePath) {
-                    @unlink(public_path('post_files/' . $filePath));
-                }
-            }
-            
-            throw $e;
         }
     }
+    // Category 3: Events
+    elseif ($categoryId == 3) {
+        $validator->addRules([
+            'event_date' => 'required|date',
+            'event_end_date' => 'nullable|date|after_or_equal:event_date',
+            'technology_topic' => 'required|string|max:255',
+        ]);
+        
+        if ($subcategoryId == 6) { // Hosted Event
+            // No additional rules
+        } elseif ($subcategoryId == 7) { // Attended an Event
+            $validator->addRules([
+                'organizer_id' => 'nullable|exists:users,id',
+            ]);
+        } elseif ($subcategoryId == 8) { // Hackathon
+            $validator->addRules([
+                'result_rank' => 'nullable|string|max:100',
+            ]);
+        } elseif ($subcategoryId == 9) { // Webinar
+            $validator->addRules([
+                'host_id' => 'nullable|exists:users,id',
+            ]);
+        }
+    }
+    // Category 4: Knowledge Sharing
+    elseif ($categoryId == 4) {
+        $validator->addRules([
+            'technology_topic' => 'required|string|max:255',
+        ]);
+        
+        if ($subcategoryId == 10) { // Ideas/Suggestions
+            $validator->addRules([
+                'idea_title' => 'required|string|max:255',
+            ]);
+        } elseif ($subcategoryId == 11) { // Playbook/Guide
+            $validator->addRules([
+                'guide_title' => 'required|string|max:255',
+            ]);
+        } elseif ($subcategoryId == 12) { // Trying New
+            // No additional rules
+        }
+    }
+    }
+
 
     /**
      * Get user's remaining job posting quota
      */
     public function getJobPostingQuota(Request $request)
     {
+        
+        
         try {
             $user = Auth::user();
             
@@ -4108,6 +4135,14 @@ class PostController extends Controller
             ];
         });
     }
+    
+    
+    private function getEntityData($id)
+    {
+        if (!$id) {
+            return null;
+        }
+    }
 
     /**
      * Format single comment response
@@ -4309,4 +4344,648 @@ class PostController extends Controller
         
         return $content;
     }
+    
+    
+    public function repostPost(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+            
+            $validator = Validator::make($request->all(), [
+                'repost_comment' => 'nullable|string|max:1000',
+                'is_published' => 'boolean',
+            ]);
+    
+            if ($validator->fails()) {
+                $errors = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $errors[$field] = $messages[0];
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => (object)$errors
+                ], 422);
+            }
+    
+            // Find the original post (could be a post or a repost)
+            $post = Post::where('id', $id)
+                ->where('is_active', true)
+                ->where('is_published', true)
+                ->first();
+    
+            if (!$post) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Post not found',
+                    'errors' => (object)['post' => 'Post not found']
+                ], 404);
+            }
+    
+            // Get the actual original post (if this is a repost, get the original)
+            $originalPost = $this->getOriginalPost($post);
+    
+            // Check if user has already reposted this post (optional - remove if you allow multiple reposts)
+            $alreadyReposted = PostRepost::where('original_post_id', $originalPost->id)
+                ->where('user_id', $user->id)
+                ->exists();
+    
+            if ($alreadyReposted) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already reposted this post',
+                    'errors' => (object)['repost' => 'Already reposted']
+                ], 400);
+            }
+    
+            DB::beginTransaction();
+    
+            try {
+                // Prepare repost content with attribution
+                $repostContent = $this->prepareRepostContent($originalPost, $request->repost_comment);
+                
+                // Create NEW post (repost)
+                $repostData = [
+                    'user_id' => $user->id,
+                    'post_user_type' => $user->usertype,
+                    'post_type_id' => $originalPost->post_type_id,
+                    'category_id' => $originalPost->category_id,
+                    'subcategory_id' => $originalPost->subcategory_id,
+                    'title' => $this->generateRepostTitle($originalPost->title),
+                    'content' => $repostContent,
+                    'short_description' => $originalPost->short_description,
+                    'images' => $originalPost->images, // Copy images from original
+                    'files' => $originalPost->files,    // Copy files from original
+                    'is_published' => $request->is_published ?? true,
+                    'is_active' => true,
+                    'original_post_id' => $originalPost->id,
+                    'is_repost' => true,
+                ];
+    
+                // Add category-specific fields from original post
+                $categorySpecificFields = [
+                    'tech_stack' => $originalPost->tech_stack,
+                    'idea_or_goal' => $originalPost->idea_or_goal,
+                    'outcome_or_fun_element' => $originalPost->outcome_or_fun_element,
+                    'project_domain' => $originalPost->project_domain,
+                    'role_in_project' => $originalPost->role_in_project,
+                    'duration_start' => $originalPost->duration_start,
+                    'duration_end' => $originalPost->duration_end,
+                    'certification_title' => $originalPost->certification_title,
+                    'award_name' => $originalPost->award_name,
+                    'technology_topic' => $originalPost->technology_topic,
+                    'occasion_title' => $originalPost->occasion_title,
+                    'message' => $originalPost->message,
+                    'event_date' => $originalPost->event_date,
+                    'event_end_date' => $originalPost->event_end_date,
+                    'result_rank' => $originalPost->result_rank,
+                    'idea_title' => $originalPost->idea_title,
+                    'guide_title' => $originalPost->guide_title,
+                    'organizer_id' => $originalPost->organizer_id,
+                    'host_id' => $originalPost->host_id,
+                ];
+    
+                // Filter out null values
+                $categorySpecificFields = array_filter($categorySpecificFields);
+                $repostData = array_merge($repostData, $categorySpecificFields);
+    
+                // Create the repost
+                $repost = Post::create($repostData);
+    
+                // Create repost record
+                $repostRecord = PostRepost::create([
+                    'original_post_id' => $originalPost->id,
+                    'reposted_post_id' => $repost->id,
+                    'user_id' => $user->id,
+                    'repost_comment' => $request->repost_comment,
+                ]);
+    
+                // Handle tags from original post (copy them)
+                if ($originalPost->taggedUsers) {
+                    foreach ($originalPost->taggedUsers as $taggedUser) {
+                        PostTag::create([
+                            'post_id' => $repost->id,
+                            'tagged_user_id' => $taggedUser->id,
+                        ]);
+                    }
+                }
+                
+                if ($originalPost->taggedCompanies) {
+                    foreach ($originalPost->taggedCompanies as $taggedCompany) {
+                        PostTag::create([
+                            'post_id' => $repost->id,
+                            'tagged_company_id' => $taggedCompany->id,
+                        ]);
+                    }
+                }
+    
+                // Increment repost count on original post
+                $originalPost->increment('repost_count');
+    
+                DB::commit();
+    
+                // Load relationships
+                $repost->load(['postType', 'category', 'subcategory', 'user', 'taggedUsers', 'taggedCompanies']);
+    
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Post reposted successfully',
+                    'data' => [
+                        'repost' => $this->formatPostResponse($repost),
+                        'original_post_id' => $originalPost->id,
+                        'repost_count' => $originalPost->repost_count,
+                        'type' => 'repost'
+                    ]
+                ], 201);
+    
+            } catch (Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+    
+        } catch (Exception $e) {
+            Log::error('Repost failed: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to repost',
+                'errors' => (object)['server' => 'An error occurred: ' . $e->getMessage()]
+            ], 500);
+        }
+    }
+    
+    
+    public function getRepost($id)
+    {
+        try {
+            $repost = PostRepost::with(['originalPost', 'repostedPost', 'user'])
+                ->find($id);
+    
+            if (!$repost) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Repost not found'
+                ], 404);
+            }
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Repost details retrieved',
+                'data' => [
+                    'id' => $repost->id,
+                    'repost_comment' => $repost->repost_comment,
+                    'created_at' => $repost->created_at,
+                    'user' => $this->getEntityData($repost->user_id),
+                    'original_post' => $this->formatPostResponse($repost->originalPost),
+                    'reposted_post' => $this->formatPostResponse($repost->repostedPost),
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get repost details',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+    
+    /**
+     * Get reposts of a post
+     */
+    public function getPostReposts($postId)
+    {
+        try {
+            $post = Post::find($postId);
+    
+            if (!$post) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Post not found'
+                ], 404);
+            }
+    
+            $reposts = PostRepost::where('original_post_id', $postId)
+                ->with(['user', 'repostedPost'])
+                ->orderBy('created_at', 'desc')
+                ->paginate(20);
+    
+            $formattedReposts = $reposts->map(function ($repost) {
+                return [
+                    'id' => $repost->id,
+                    'repost_comment' => $repost->repost_comment,
+                    'created_at' => $repost->created_at,
+                    'time_ago' => $repost->created_at->diffForHumans(),
+                    'user' => $this->getEntityData($repost->user_id),
+                    'reposted_post_id' => $repost->reposted_post_id,
+                ];
+            });
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Post reposts retrieved',
+                'data' => [
+                    'post_id' => $postId,
+                    'total_reposts' => $post->repost_count,
+                    'reposts' => $formattedReposts,
+                    'pagination' => [
+                        'current_page' => $reposts->currentPage(),
+                        'per_page' => $reposts->perPage(),
+                        'total' => $reposts->total(),
+                        'last_page' => $reposts->lastPage(),
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get reposts',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+    
+    
+    public function getUserReposts(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $perPage = $request->get('per_page', 20);
+    
+            $reposts = PostRepost::where('user_id', $user->id)
+                ->with(['originalPost', 'repostedPost'])
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+    
+            $formattedReposts = $reposts->map(function ($repost) {
+                return [
+                    'id' => $repost->id,
+                    'repost_comment' => $repost->repost_comment,
+                    'created_at' => $repost->created_at,
+                    'time_ago' => $repost->created_at->diffForHumans(),
+                    'original_post' => [
+                        'id' => $repost->originalPost->id,
+                        'title' => $repost->originalPost->title,
+                        'author' => $this->getEntityData($repost->originalPost->user_id),
+                    ],
+                    'reposted_post' => $this->formatPostResponse($repost->repostedPost, false),
+                ];
+            });
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Your reposts retrieved',
+                'data' => [
+                    'reposts' => $formattedReposts,
+                    'total' => $reposts->total(),
+                    'pagination' => [
+                        'current_page' => $reposts->currentPage(),
+                        'per_page' => $reposts->perPage(),
+                        'total' => $reposts->total(),
+                        'last_page' => $reposts->lastPage(),
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get your reposts',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+    
+    
+    public function deleteRepost($id)
+    {
+        try {
+            $user = Auth::user();
+    
+            $repost = PostRepost::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+    
+            if (!$repost) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Repost not found or you are not authorized'
+                ], 404);
+            }
+    
+            DB::beginTransaction();
+    
+            try {
+                // Delete the reposted post
+                $repostedPost = Post::find($repost->reposted_post_id);
+                if ($repostedPost) {
+                    // Delete associated files
+                    if ($repostedPost->images) {
+                        $images = json_decode($repostedPost->images, true);
+                        if (is_array($images)) {
+                            foreach ($images as $image) {
+                                @unlink(public_path('post_images/' . $image));
+                            }
+                        }
+                    }
+                    
+                    if ($repostedPost->files) {
+                        $files = json_decode($repostedPost->files, true);
+                        if (is_array($files)) {
+                            foreach ($files as $file) {
+                                @unlink(public_path('post_files/' . $file));
+                            }
+                        }
+                    }
+    
+                    // Soft delete the reposted post
+                    $repostedPost->update(['is_active' => false]);
+                }
+    
+                // Decrement repost count on original post
+                $originalPost = Post::find($repost->original_post_id);
+                if ($originalPost) {
+                    $originalPost->decrement('repost_count');
+                }
+    
+                // Delete repost record
+                $repost->delete();
+    
+                DB::commit();
+    
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Repost deleted successfully'
+                ]);
+    
+            } catch (Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete repost',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+    
+    
+    private function getOriginalPost($post)
+    {
+        if ($post->original_post_id) {
+            $original = Post::find($post->original_post_id);
+            if ($original && $original->original_post_id) {
+                return $this->getOriginalPost($original); // Recursive for chain reposts
+            }
+            return $original ?: $post;
+        }
+        return $post;
+    }
+    
+    
+    private function prepareRepostContent($originalPost, $userComment = null)
+    {
+        // Get original author name
+        $originalAuthor = $this->getAuthorData($originalPost);
+        $originalAuthorName = $originalAuthor['name'] ?? 'Unknown User';
+        
+        // Build repost content
+        $content = '';
+        
+        // Add user's comment if any (at the top)
+        if ($userComment) {
+            $content .= '<div class="repost-comment" style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #007bff;">';
+            $content .= '<p style="margin: 0; font-style: italic;">"' . e($userComment) . '"</p>';
+            $content .= '</div>';
+        }
+        
+        // Add original post attribution
+        $content .= '<div class="original-post-attribution" style="margin-top: 10px; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fafafa;">';
+        $content .= '<div style="margin-bottom: 10px; font-size: 0.9rem; color: #666;">';
+        $content .= '🔁 <strong>Reposted from ' . e($originalAuthorName) . '</strong>';
+        $content .= '</div>';
+        $content .= '<hr style="margin: 10px 0;">';
+        $content .= '<div class="original-content">';
+        $content .= $originalPost->content;
+        $content .= '</div>';
+        $content .= '</div>';
+        
+        return $content;
+    }
+    
+    /**
+     * Generate title for repost
+     */
+    private function generateRepostTitle($originalTitle)
+    {
+        return 'Repost: ' . $originalTitle;
+    }
+    
+    
+    private function getConnectionStatus($currentUser, $targetId)
+    {
+        // Check if target is a company
+        $isCompany = Company::where('id', $targetId)->exists();
+        
+        if ($isCompany) {
+            // Check if following company
+            $isFollowing = FavouriteCompany::where('user_id', $currentUser->id)
+                ->where('company_id', $targetId)
+                ->exists();
+            
+            if ($isFollowing) {
+                return 'following';
+            }
+            
+            // Check if blocked
+            $isBlocked = UserConnection::where('follower_id', $currentUser->id)
+                ->where('following_id', $targetId)
+                ->where('status', 'blocked')
+                ->exists();
+            
+            if ($isBlocked) {
+                return 'blocked';
+            }
+            
+            return 'not_following';
+        }
+        
+        // Check if it's a user
+        $connection = UserConnection::where(function($query) use ($currentUser, $targetId) {
+            $query->where('follower_id', $currentUser->id)
+                  ->where('following_id', $targetId);
+        })->orWhere(function($query) use ($currentUser, $targetId) {
+            $query->where('follower_id', $targetId)
+                  ->where('following_id', $currentUser->id);
+        })->first();
+    
+        if (!$connection) {
+            return 'none';
+        }
+    
+        if ($connection->follower_id == $currentUser->id) {
+            return $connection->status; // 'pending', 'accepted', 'blocked'
+        } else {
+            if ($connection->status == 'accepted') {
+                return 'accepted';
+            } elseif ($connection->status == 'pending') {
+                return 'pending_from_them';
+            } elseif ($connection->status == 'blocked') {
+                return 'blocked_by_them';
+            }
+        }
+    
+        return 'none';
+    }
+    
+    /**
+     * Get mutual connections count between two users
+     */
+    private function getMutualCount($userId1, $userId2)
+    {
+        // Get user1's following
+        $user1Following = UserConnection::where('follower_id', $userId1)
+            ->where('status', 'accepted')
+            ->pluck('following_id')
+            ->toArray();
+        
+        // Get user2's following
+        $user2Following = UserConnection::where('follower_id', $userId2)
+            ->where('status', 'accepted')
+            ->pluck('following_id')
+            ->toArray();
+        
+        // Count mutual connections
+        $mutual = array_intersect($user1Following, $user2Following);
+        
+        return count($mutual);
+    }
+    
+    
+    public function getPostLikers(Request $request, $postId)
+    {
+        try {
+            $currentUser = Auth::user();
+            
+            $validator = Validator::make($request->all(), [
+                'page' => 'nullable|integer|min:1',
+                'per_page' => 'nullable|integer|min:1|max:100',
+                'search' => 'nullable|string|max:255',
+            ]);
+    
+            if ($validator->fails()) {
+                $errors = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $errors[$field] = $messages[0];
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => (object)$errors
+                ], 422);
+            }
+    
+            // Check if post exists
+            $post = Post::where('id', $postId)
+                ->where('is_active', true)
+                ->first();
+    
+            if (!$post) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Post not found',
+                    'errors' => (object)['post' => 'Post not found']
+                ], 404);
+            }
+    
+            $perPage = $request->get('per_page', 20);
+            $search = $request->get('search');
+    
+            // Get likes query
+            $likesQuery = PostLike::where('post_id', $postId)
+                ->orderBy('created_at', 'desc');
+    
+            // Apply search if provided
+            if ($search) {
+                $likesQuery->whereHas('user', function($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('name', 'like', "%{$search}%");
+                });
+            }
+    
+            // Get paginated likes
+            $likes = $likesQuery->paginate($perPage);
+    
+            // Format likers with connection status
+            $formattedLikers = $likes->map(function ($like) use ($currentUser) {
+                $likerData = $this->getEntityData($like->user_id);
+                
+                // Get connection status
+                $connectionStatus = $this->getConnectionStatus($currentUser, $like->user_id);
+                
+                return [
+                    'id' => $likerData['id'],
+                    'name' => $likerData['name'],
+                    'usertype' => $likerData['usertype'],
+                    'image' => $likerData['image'],
+                    'headline' => $likerData['headline'] ?? null,
+                    'liked_at' => $like->created_at,
+                    'liked_at_formatted' => $like->created_at->diffForHumans(),
+                    'connection_status' => $connectionStatus,
+                    'is_friend' => in_array($connectionStatus, ['accepted', 'following']),
+                    'mutual_count' => $this->getMutualCount($currentUser->id, $like->user_id),
+                ];
+            });
+    
+            // Get counts by connection type
+            $allLikerIds = PostLike::where('post_id', $postId)->pluck('user_id');
+            
+            $connectedCount = 0;
+            $notConnectedCount = 0;
+            
+            foreach ($allLikerIds as $likerId) {
+                $status = $this->getConnectionStatus($currentUser, $likerId);
+                if (in_array($status, ['accepted', 'following'])) {
+                    $connectedCount++;
+                } else {
+                    $notConnectedCount++;
+                }
+            }
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Post likers retrieved successfully',
+                'data' => [
+                    'post_id' => (int)$postId,
+                    'total_likes' => $post->likes_count,
+                    'likers' => $formattedLikers,
+                    'stats' => [
+                        'total' => $likes->total(),
+                        'connected' => $connectedCount,
+                        'not_connected' => $notConnectedCount,
+                        'current_page' => $likes->currentPage(),
+                        'per_page' => $likes->perPage(),
+                        'last_page' => $likes->lastPage(),
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get post likers',
+                'errors' => (object)['server' => $e->getMessage()]
+            ], 500);
+        }
+    }
+
+    
+    
 }

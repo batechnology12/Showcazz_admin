@@ -441,6 +441,8 @@ class UniversalConnectionController extends Controller
 
     public function getAllConnections(Request $request)
     {
+        
+       
         try {
             $currentUser  = Auth::user();
             $connections  = collect();
@@ -662,6 +664,7 @@ class UniversalConnectionController extends Controller
             ], 500);
         }
     }
+}
 
     // ============================================
     // 7. GET BLOCK LIST
@@ -1398,5 +1401,166 @@ class UniversalConnectionController extends Controller
         if (!$deleted) throw new Exception('User not blocked');
 
         return ['unblocked_id' => $blockedId, 'action' => 'unblocked'];
+    }
+    
+    
+    
+    /**
+     * 7. Get Block List - All blocked users and companies
+     */
+    public function getBlockList(Request $request)
+    {
+        try {
+            $currentUser = Auth::user();
+            $perPage = $request->get('per_page', 20);
+            $page = $request->get('page', 1);
+    
+            // Get all blocked users and companies from user_connections table
+            $blockedConnections = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+    
+            $blockedItems = [];
+    
+            foreach ($blockedConnections as $connection) {
+                $targetId = $connection->following_id;
+                
+                // Check if it's a user
+                $user = User::find($targetId);
+                if ($user) {
+                    // Get enriched user data
+                    $enrichedData = $this->getEnrichedUserData($user);
+                    
+                    $blockedItems[] = [
+                        'id' => $connection->id,
+                        'blocked_id' => $enrichedData['id'],
+                        'name' => $enrichedData['name'],
+                        'email' => $enrichedData['email'],
+                        'usertype' => $enrichedData['usertype'],
+                        'headline' => $enrichedData['headline'],
+                        'image' => $enrichedData['image'],
+                        'entity_type' => 'user',
+                        'blocked_at' => $connection->created_at,
+                        'blocked_at_formatted' => $connection->created_at->diffForHumans(),
+                        'reason' => $connection->reason ?? null,
+                    ];
+                    continue;
+                }
+    
+                // Check if it's a company
+                $company = Company::find($targetId);
+                if ($company) {
+                    $blockedItems[] = [
+                        'id' => $connection->id,
+                        'blocked_id' => $company->id,
+                        'name' => $company->name,
+                        'email' => $company->email,
+                        'usertype' => 'company',
+                        'headline' => $company->description,
+                        'image' => $company->logo ? asset('company_logos/' . $company->logo) : null,
+                        'slug' => $company->slug,
+                        'entity_type' => 'company',
+                        'blocked_at' => $connection->created_at,
+                        'blocked_at_formatted' => $connection->created_at->diffForHumans(),
+                        'reason' => $connection->reason ?? null,
+                    ];
+                }
+            }
+    
+            // Get total counts
+            $totalBlockedUsers = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->whereIn('following_id', function($query) {
+                    $query->select('id')->from('users');
+                })
+                ->count();
+    
+            $totalBlockedCompanies = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->whereIn('following_id', function($query) {
+                    $query->select('id')->from('companies');
+                })
+                ->count();
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Block list retrieved successfully',
+                'data' => [
+                    'blocked_items' => $blockedItems,
+                    'stats' => [
+                        'total_blocked' => $blockedConnections->total(),
+                        'total_users' => $totalBlockedUsers,
+                        'total_companies' => $totalBlockedCompanies,
+                    ],
+                    'pagination' => [
+                        'current_page' => $blockedConnections->currentPage(),
+                        'per_page' => $blockedConnections->perPage(),
+                        'total' => $blockedConnections->total(),
+                        'last_page' => $blockedConnections->lastPage(),
+                        'from' => $blockedConnections->firstItem(),
+                        'to' => $blockedConnections->lastItem(),
+                    ]
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get block list: ' . $e->getMessage(),
+                'errors' => (object)[
+                    'server' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ], 500);
+        }
+    }
+    
+    /**
+     * 8. Unblock from list (convenience method)
+     */
+    public function unblockFromList($id)
+    {
+        try {
+            $currentUser = Auth::user();
+    
+            $connection = UserConnection::where('id', $id)
+                ->where('follower_id', $currentUser->id)
+                ->where('status', 'blocked')
+                ->first();
+    
+            if (!$connection) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Blocked item not found'
+                ], 404);
+            }
+    
+            $targetId = $connection->following_id;
+            $entityType = $this->detectEntityType($targetId);
+            
+            $connection->delete();
+    
+            $message = $entityType === 'company' 
+                ? 'Company unblocked successfully' 
+                : 'User unblocked successfully';
+    
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'unblocked_id' => $targetId,
+                    'entity_type' => $entityType
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to unblock: ' . $e->getMessage(),
+                'errors' => (object)['server' => $e->getMessage()]
+            ], 500);
+        }
     }
 }

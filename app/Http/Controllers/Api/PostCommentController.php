@@ -515,7 +515,7 @@ class PostCommentController extends Controller
     // ============================================
 
     /**
-     * Format comment response
+     * Format comment response - FIXED with direct table checks
      */
     private function formatComment($comment, $user = null)
     {

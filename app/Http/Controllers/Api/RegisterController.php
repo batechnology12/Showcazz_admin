@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
+
 class RegisterController extends Controller
 {
     // Status constants to match UniversalConnectionController
@@ -831,6 +832,19 @@ class RegisterController extends Controller
             ], 500);
         }
     }
+    
+    
+    public function getEditProfileData(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Not authenticated'
+                ], 401);
+            }
 
     public function getEditProfileData(Request $request)
     {
@@ -2358,6 +2372,8 @@ class RegisterController extends Controller
             ], 500);
         }
     }
+    
+    
 
     /**
      * Get all profile details
