@@ -37,4 +37,32 @@ class BlockedUser extends Model
     {
         return $this->belongsTo(User::class, 'blocked_id');
     }
+    
+    
+    public static function isBlocked($blockerId, $blockedId)
+    {
+        return self::where('blocker_id', $blockerId)
+            ->where('blocked_id', $blockedId)
+            ->exists();
+    }
+
+    /**
+     * Get all blocked IDs for a user
+     */
+    public static function getBlockedIds($userId)
+    {
+        return self::where('blocker_id', $userId)
+            ->pluck('blocked_id')
+            ->toArray();
+    }
+
+    /**
+     * Get all blockers for a user (who has blocked this user)
+     */
+    public static function getBlockerIds($userId)
+    {
+        return self::where('blocked_id', $userId)
+            ->pluck('blocker_id')
+            ->toArray();
+    }
 }

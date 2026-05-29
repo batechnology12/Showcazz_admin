@@ -64,6 +64,7 @@ class Kernel extends HttpKernel
         'admin' => \App\Http\Middleware\RedirectIfAdminNotAuthenticated::class,
         'admin.guest' => \App\Http\Middleware\RedirectIfAdminAuthenticated::class,
         'checkAdminRoles' => \App\Http\Middleware\CheckAdminRole::class,
+        'permission' => \App\Http\Middleware\CheckPermission::class,
         'company' => \App\Http\Middleware\RedirectIfCompanyNotAuthenticated::class,
         'company.guest' => \App\Http\Middleware\RedirectIfCompanyAuthenticated::class,
         'verified' => \App\Http\Middleware\VerifiedMiddleware::class,

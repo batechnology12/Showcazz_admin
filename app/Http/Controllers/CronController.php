@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 class CronController extends Controller
 {
 
-    use App\Traits\Cron;
+    use Cron;
 
     public function checkPackageValidity()
     {

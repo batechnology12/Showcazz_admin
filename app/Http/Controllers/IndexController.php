@@ -24,6 +24,7 @@ use App\Traits\JobTrait;
 use App\Traits\Active;
 use App\Helpers\DataArrayHelper;
 use App\Traits\FetchJobSeekers;
+use Illuminate\Support\Facades\Artisan;
 
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
@@ -58,6 +59,8 @@ class IndexController extends Controller
      */
     public function index(Request $request)
     {
+        
+       
         return '
             <!DOCTYPE html>
             <html lang="en">

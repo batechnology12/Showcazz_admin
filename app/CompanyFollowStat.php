@@ -1,4 +1,5 @@
 <?php
+// app/CompanyFollowStat.php
 
 namespace App;
 
@@ -27,5 +28,39 @@ class CompanyFollowStat extends Model
     public function company()
     {
         return $this->belongsTo(Company::class, 'company_id');
+    }
+    
+    /**
+     * Increment followers count
+     */
+    public function incrementFollowers()
+    {
+        $this->followers_count++;
+        $this->last_updated = now();
+        $this->save();
+    }
+    
+    /**
+     * Decrement followers count
+     */
+    public function decrementFollowers()
+    {
+        if ($this->followers_count > 0) {
+            $this->followers_count--;
+        }
+        $this->last_updated = now();
+        $this->save();
+    }
+    
+    /**
+     * Get or create follow stat for company
+     */
+    public static function getOrCreateForCompany($companyId)
+    {
+        $stat = self::firstOrCreate(
+            ['company_id' => $companyId],
+            ['followers_count' => 0, 'last_updated' => now()]
+        );
+        return $stat;
     }
 }

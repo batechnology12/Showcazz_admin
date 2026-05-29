@@ -11,6 +11,19 @@ class PostLike extends Model
     protected $guarded = ['id'];
     protected $dates = ['created_at'];
     
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::addGlobalScope('active_author', function ($builder) {
+            if (!request()->is('admin/*') && !request()->is('admin') && !app()->runningInConsole()) {
+                $builder->whereHas('user', function ($query) {
+                    $query->where('is_active', true);
+                });
+            }
+        });
+    }
+    
     protected $fillable = [
         'post_id',
         'user_id',

@@ -5,7 +5,7 @@
         <li class="nav-item  "> <a href="{{ route('list.companies') }}" class="nav-link "> <span class="title">List Companies</span> </a> </li>
 
         <li class="nav-item  "> <a href="{{ route('create.company') }}" class="nav-link "> <span class="title">Add new Company</span> </a> </li>
-<li class="nav-item  "> <a href="{{ route('list.payment.hostory') }}" class="nav-link "> <span class="title">List Companies Payment History</span> </a> </li>
+<!--<li class="nav-item  "> <a href="{{ route('list.payment.hostory') }}" class="nav-link "> <span class="title">List Companies Payment History</span> </a> </li>-->
     </ul>
 
 </li>

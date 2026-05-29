@@ -14,8 +14,16 @@ class AdminAuthorizationHelper
             return false;
         }
         $user = Auth::guard('admin')->user();
-        $userRole = $user->getAdminUserRole();
-        return in_array($userRole->role_abbreviation, $allowed_roles) ? true : false;
+        return $user->hasRole($allowed_roles);
+    }
+
+    public static function checkPermission($permission_name)
+    {
+        if (null === Auth::guard('admin')->user()) {
+            return false;
+        }
+        $user = Auth::guard('admin')->user();
+        return $user->hasPermission($permission_name);
     }
 
 }

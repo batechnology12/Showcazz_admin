@@ -100,6 +100,7 @@ use AuthenticatesUsers;
 
     {
 
+      
         return view('company_auth.login');
 
     }

@@ -4,243 +4,317 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\User;
-use App\Company;
 use App\UserConnection;
-use App\FavouriteCompany;
+use App\BlockedUser;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class UniversalConnectionController extends Controller
 {
+    // Status constants
+    const STATUS_PENDING  = 'pending';
+    const STATUS_ACCEPTED = 'accepted';
+    const STATUS_REJECTED = 'rejected';
+    const STATUS_BLOCKED  = 'blocked';
+
+    protected $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
+    // ============================================
+    // NOTIFICATION HELPER
+    // ============================================
+
     /**
-     * 1. Get Follow Suggestions (Auto-detect both Users & Companies)
+     * Send + store connection notification via NotificationService
+     * FCM body/data payload is untouched — handled inside NotificationService
      */
+    private function sendConnectionNotification($currentUser, $targetUser, $action)
+    {
+        try {
+            // Respect user push notification preference
+            if (!$targetUser->push_notification) {
+                return;
+            }
+
+            $title = '';
+            $body  = '';
+
+            switch ($action) {
+                case 'follow':
+                    $title = "New Follow Request";
+                    $body  = $currentUser->getName() . " sent you a follow request.";
+                    break;
+
+                case 'accept':
+                    $title = "Follow Request Accepted";
+                    $body  = $currentUser->getName() . " accepted your follow request.";
+                    break;
+
+                // case 'reject':
+                //     $title = "Follow Request Rejected";
+                //     $body  = $currentUser->getName() . " rejected your follow request.";
+                //     break;
+
+                default:
+                    return; // block/unblock/unfollow — no notification needed
+            }
+
+            // Action payload matches original FCM data structure
+            $actionPayload = [
+                'screen'  => 'profile',
+                'user_id' => (string) $currentUser->id,
+                'type'    => $action,
+            ];
+
+            // Stores in notifications table + sends FCM push
+            $this->notificationService->send(
+                $targetUser->id,     // recipient user_id
+                $action,             // type  (follow | accept | reject)
+                $title,
+                $body,
+                'profile',           // screen
+                $actionPayload,      // action_payload / data payload
+                $currentUser->id     // from_user_id
+            );
+
+        } catch (\Exception $e) {
+            Log::error('Connection notification failed', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    // ============================================
+    // ENRICHED ENTITY DATA HELPER
+    // ============================================
+
+    private function getEnrichedEntityData($entity)
+    {
+        if (!$entity) {
+            return null;
+        }
+
+        if ($entity->usertype === 'company') {
+            return [
+                'id'                         => $entity->id,
+                'name'                       => $entity->company_name ?? $entity->name ?? 'Unknown Company',
+                'email'                      => $entity->email ?? null,
+                'usertype'                   => 'company',
+                'headline'                   => $entity->company_description ?? $entity->headline,
+                'image'                      => $entity->company_logo
+                                                    ? asset('company_logos/' . $entity->company_logo)
+                                                    : ($entity->image ? asset('user_images/' . $entity->image) : null),
+                'slug'                       => $entity->company_slug ?? null,
+                'visibility_control'         => $entity->visibility_control ?? 'public',
+                'post_visibility_control'    => $entity->post_visibility_control ?? 'public',
+                'message_visibility_control' => $entity->message_visibility_control ?? 'public',
+                'entity_type'                => 'company',
+            ];
+        }
+
+        $firstName = $entity->first_name ?? '';
+        $lastName  = $entity->last_name ?? '';
+        $name      = trim($firstName . ' ' . $lastName) ?: ($entity->name ?? 'Unknown User');
+
+        return [
+            'id'                         => $entity->id,
+            'name'                       => $name,
+            'email'                      => $entity->email ?? null,
+            'usertype'                   => $entity->usertype ?? 'user',
+            'headline'                   => $entity->headline ?? null,
+            'image'                      => $entity->image ? asset('user_images/' . $entity->image) : null,
+            'slug'                       => null,
+            'visibility_control'         => $entity->visibility_control ?? 'public',
+            'post_visibility_control'    => $entity->post_visibility_control ?? 'public',
+            'message_visibility_control' => $entity->message_visibility_control ?? 'public',
+            'entity_type'                => 'user',
+        ];
+    }
+
+    // ============================================
+    // 1. GET FOLLOW SUGGESTIONS
+    // ============================================
+
     public function getSuggestions(Request $request)
     {
         try {
             $currentUser = Auth::user();
-            $perPage = $request->get('per_page', 20);
-            $page = $request->get('page', 1);
+            $perPage     = $request->get('per_page', 20);
 
-            $suggestions = collect();
-            
-            // Get user's current connections for exclusion
-            $followingUserIds = UserConnection::where('follower_id', $currentUser->id)
-                ->where('status', 'accepted')
-                ->pluck('following_id')
-                ->toArray();
-            
-            $followedCompanyIds = FavouriteCompany::where('user_id', $currentUser->id)
-                ->pluck('company_id')
+            $connectedUserIds = UserConnection::where(function ($q) use ($currentUser) {
+                    $q->where('follower_id', $currentUser->id)
+                      ->orWhere('following_id', $currentUser->id);
+                })
+                ->get()
+                ->map(fn($conn) => $conn->follower_id == $currentUser->id
+                    ? $conn->following_id
+                    : $conn->follower_id)
                 ->toArray();
 
-            // Get blocked connections
-            $blockedUserIds = UserConnection::where('follower_id', $currentUser->id)
-                ->where('status', 'blocked')
-                ->pluck('following_id')
-                ->toArray();
+            $blockedIds  = $this->getBlockedUserIds($currentUser->id);
+            $excludedIds = array_unique(array_merge($connectedUserIds, [$currentUser->id], $blockedIds));
 
-            // Get user suggestions (50% of suggestions)
-            $userLimit = ceil($perPage / 2);
-            $userSuggestions = User::where('is_active', 1)
-                ->where('id', '!=', $currentUser->id)
-                ->whereNotIn('id', $followingUserIds)
-                ->whereNotIn('id', $blockedUserIds)
-                ->select('id', 'name', 'email', 'usertype', 'headline', 'image', 'created_at')
+            $suggestions = User::where('is_active', 1)
+                ->whereNotIn('id', $excludedIds)
+                ->select(
+                    'id', 'first_name', 'last_name', 'company_name', 'name',
+                    'email', 'usertype', 'headline', 'image', 'company_logo',
+                    'company_slug', 'company_description', 'created_at',
+                    'visibility_control', 'post_visibility_control', 'message_visibility_control'
+                )
                 ->inRandomOrder()
-                ->limit($userLimit)
+                ->limit($perPage)
                 ->get()
                 ->map(function ($user) use ($currentUser) {
-                    return [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'usertype' => $user->usertype,
-                        'headline' => $user->headline,
-                        'image' => $user->image ? asset('user_images/' . $user->image) : null,
-                        'entity_type' => 'user',
-                        'mutual_count' => $this->getMutualUserCount($currentUser->id, $user->id),
-                        'connection_status' => $this->getUserConnectionStatus($currentUser->id, $user->id),
-                    ];
+                    $enrichedData = $this->getEnrichedEntityData($user);
+
+                    if ($user->usertype === 'company') {
+                        return array_merge($enrichedData, [
+                            'slug'              => $user->company_slug,
+                            'description'       => $user->company_description,
+                            'followers_count'   => UserConnection::where('following_id', $user->id)
+                                                    ->where('status', self::STATUS_ACCEPTED)->count(),
+                            'mutual_count'      => 0,
+                            'connection_status' => 'none',
+                        ]);
+                    }
+
+                    return array_merge($enrichedData, [
+                        'mutual_count'      => $this->getMutualConnectionCount($currentUser->id, $user->id),
+                        'connection_status' => 'none',
+                    ]);
                 });
-            
-            $suggestions = $suggestions->merge($userSuggestions);
-
-            // Get company suggestions (remaining 50%)
-            $companyLimit = $perPage - $userSuggestions->count();
-            if ($companyLimit > 0) {
-                $companySuggestions = Company::where('is_active', 1)
-                    ->whereNotIn('id', $followedCompanyIds)
-                    ->select('id', 'name', 'email', 'slug', 'logo', 'description', 'created_at')
-                    ->inRandomOrder()
-                    ->limit($companyLimit)
-                    ->get()
-                    ->map(function ($company) use ($currentUser) {
-                        return [
-                            'id' => $company->id,
-                            'name' => $company->name,
-                            'email' => $company->email,
-                            'slug' => $company->slug,
-                            'logo' => $company->logo ? asset('company_logos/' . $company->logo) : null,
-                            'description' => $company->description,
-                            'entity_type' => 'company',
-                            'followers_count' => FavouriteCompany::where('company_id', $company->id)->count(),
-                            'is_following' => FavouriteCompany::where('user_id', $currentUser->id)
-                                ->where('company_id', $company->id)
-                                ->exists(),
-                        ];
-                    });
-                
-                $suggestions = $suggestions->merge($companySuggestions);
-            }
-
-            // Shuffle suggestions for better mix
-            $suggestions = $suggestions->shuffle();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Suggestions retrieved successfully',
-                'data' => [
-                    'suggestions' => $suggestions,
-                    'total' => $suggestions->count(),
-                    'user_count' => $userSuggestions->count(),
-                    'company_count' => $suggestions->count() - $userSuggestions->count(),
+                'data'    => [
+                    'suggestions' => $suggestions->values(),
+                    'total'       => $suggestions->count(),
                 ]
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get suggestions failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get suggestions',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors'  => (object) ['server' => 'An error occurred']
             ], 500);
         }
     }
 
-    /**
-     * 2. Get Mutual Connections (Auto-detect both Users & Companies)
-     */
+    // ============================================
+    // 2. GET MUTUAL CONNECTIONS
+    // ============================================
+
     public function getMutualConnections(Request $request)
     {
         try {
-            $currentUser = Auth::user();
-            $perPage = $request->get('per_page', 20);
-
+            $currentUser       = Auth::user();
+            $perPage           = $request->get('per_page', 20);
+            $page              = $request->get('page', 1);
             $mutualConnections = collect();
-            
-            // A. Get mutual connections with other users
-            // Get users I follow
-            $userFollowingIds = UserConnection::where('follower_id', $currentUser->id)
-                ->where('status', 'accepted')
-                ->pluck('following_id')
+
+            $myConnections = UserConnection::where(function ($q) use ($currentUser) {
+                    $q->where('follower_id', $currentUser->id)
+                      ->orWhere('following_id', $currentUser->id);
+                })
+                ->where('status', self::STATUS_ACCEPTED)
+                ->get()
+                ->map(fn($conn) => $conn->follower_id == $currentUser->id
+                    ? $conn->following_id
+                    : $conn->follower_id)
                 ->toArray();
-            
-            // For each user I follow, find our mutual connections
-            foreach ($userFollowingIds as $userId) {
-                $targetFollowingIds = UserConnection::where('follower_id', $userId)
-                    ->where('status', 'accepted')
-                    ->pluck('following_id')
+
+            foreach ($myConnections as $connectionId) {
+                $theirConnections = UserConnection::where(function ($q) use ($connectionId) {
+                        $q->where('follower_id', $connectionId)
+                          ->orWhere('following_id', $connectionId);
+                    })
+                    ->where('status', self::STATUS_ACCEPTED)
+                    ->get()
+                    ->map(fn($conn) => $conn->follower_id == $connectionId
+                        ? $conn->following_id
+                        : $conn->follower_id)
                     ->toArray();
-                
-                $mutualUserIds = array_intersect($userFollowingIds, $targetFollowingIds);
-                
-                // Remove current user and target user from mutual list
-                $mutualUserIds = array_diff($mutualUserIds, [$currentUser->id, $userId]);
-                
+
+                $mutualUserIds = array_diff(
+                    array_intersect($myConnections, $theirConnections),
+                    [$currentUser->id, $connectionId]
+                );
+
                 if (!empty($mutualUserIds)) {
                     $mutualUsers = User::whereIn('id', $mutualUserIds)
                         ->where('is_active', 1)
-                        ->select('id', 'name', 'usertype', 'headline', 'image')
+                        ->select(
+                            'id', 'first_name', 'last_name', 'company_name', 'name',
+                            'usertype', 'headline', 'image', 'company_logo', 'created_at',
+                            'visibility_control', 'post_visibility_control', 'message_visibility_control'
+                        )
                         ->get()
-                        ->map(function ($user) use ($userId) {
-                            return [
-                                'id' => $user->id,
-                                'name' => $user->name,
-                                'usertype' => $user->usertype,
-                                'headline' => $user->headline,
-                                'image' => $user->image ? asset('user_images/' . $user->image) : null,
-                                'entity_type' => 'user',
-                                'mutual_with' => $userId,
-                            ];
-                        });
-                    
+                        ->map(fn($user) => array_merge(
+                            $this->getEnrichedEntityData($user),
+                            [
+                                'mutual_with'       => $connectionId,
+                                'connection_status' => $this->checkIfConnected($currentUser, $user->id),
+                            ]
+                        ));
+
                     $mutualConnections = $mutualConnections->merge($mutualUsers);
                 }
             }
 
-            // B. Get mutual company follows
-            // Get companies I follow
-            $followedCompanyIds = FavouriteCompany::where('user_id', $currentUser->id)
-                ->pluck('company_id')
-                ->toArray();
-            
-            // Find other users who follow same companies
-            foreach ($followedCompanyIds as $companyId) {
-                $otherFollowers = FavouriteCompany::where('company_id', $companyId)
-                    ->where('user_id', '!=', $currentUser->id)
-                    ->pluck('user_id')
-                    ->toArray();
-                
-                if (!empty($otherFollowers)) {
-                    $company = Company::find($companyId);
-                    $mutualUsers = User::whereIn('id', $otherFollowers)
-                        ->where('is_active', 1)
-                        ->select('id', 'name', 'usertype', 'headline', 'image')
-                        ->get()
-                        ->map(function ($user) use ($company) {
-                            return [
-                                'id' => $user->id,
-                                'name' => $user->name,
-                                'usertype' => $user->usertype,
-                                'headline' => $user->headline,
-                                'image' => $user->image ? asset('user_images/' . $user->image) : null,
-                                'entity_type' => 'user',
-                                'mutual_through' => [
-                                    'type' => 'company',
-                                    'company_id' => $company->id,
-                                    'company_name' => $company->name,
-                                ],
-                            ];
-                        });
-                    
-                    $mutualConnections = $mutualConnections->merge($mutualUsers);
-                }
-            }
-
-            // Remove duplicates and limit
-            $mutualConnections = $mutualConnections->unique('id')->take($perPage);
+            $mutualConnections = $mutualConnections->unique('id');
+            $total             = $mutualConnections->count();
+            $paginated         = $mutualConnections->slice(($page - 1) * $perPage, $perPage)->values();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Mutual connections retrieved successfully',
-                'data' => [
-                    'mutual_connections' => $mutualConnections->values(),
-                    'total' => $mutualConnections->count(),
+                'data'    => [
+                    'mutual_connections' => $paginated,
+                    'pagination'         => [
+                        'current_page' => $page,
+                        'per_page'     => $perPage,
+                        'total'        => $total,
+                        'last_page'    => (int) ceil($total / $perPage),
+                    ]
                 ]
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get mutual connections failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get mutual connections',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors'  => (object) ['server' => 'An error occurred']
             ], 500);
         }
     }
 
-    /**
-     * 3. Universal Connection Actions (Follow, Unfollow, Accept, Reject, Block, Unblock)
-     */
+    // ============================================
+    // 3. HANDLE CONNECTION ACTIONS
+    // ============================================
+
     public function handleConnection(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'target_id' => 'required',
-                'action' => 'required|in:follow,unfollow,accept,reject,block,unblock',
-                'reason' => 'nullable|string|max:500',
+                'target_id' => 'required|integer',
+                'action'    => 'required|in:follow,unfollow,accept,reject,block,unblock',
+                'reason'    => 'nullable|string|max:500',
             ]);
 
             if ($validator->fails()) {
@@ -248,44 +322,39 @@ class UniversalConnectionController extends Controller
                 foreach ($validator->errors()->toArray() as $field => $messages) {
                     $errors[$field] = $messages[0];
                 }
-                
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => (object)$errors
+                    'errors'  => (object) $errors
                 ], 422);
             }
 
             $currentUser = Auth::user();
-            $targetId = $request->target_id;
-            $action = $request->action;
-            $reason = $request->reason;
+            $targetId    = $request->target_id;
+            $action      = $request->action;
+            $reason      = $request->reason;
 
-            // Auto-detect entity type
-            $entityType = $this->detectEntityType($targetId);
-            
-            if (!$entityType) {
+            $targetUser = User::find($targetId);
+            if (!$targetUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Target not found',
-                    'errors' => (object)['target_id' => 'Target not found']
+                    'errors'  => (object) ['target_id' => 'Target not found']
                 ], 404);
             }
 
-            // Check if trying to perform action on self (for users)
-            if ($entityType == 'user' && $currentUser->id == $targetId) {
+            if ($currentUser->id == $targetId) {
                 $actionMessages = [
                     'follow' => 'follow yourself',
                     'accept' => 'accept your own request',
                     'reject' => 'reject your own request',
-                    'block' => 'block yourself',
+                    'block'  => 'block yourself',
                 ];
-                
                 if (isset($actionMessages[$action])) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Cannot ' . $actionMessages[$action],
-                        'errors' => (object)['target_id' => 'Cannot ' . $actionMessages[$action]]
+                        'errors'  => (object) ['target_id' => 'Cannot ' . $actionMessages[$action]]
                     ], 400);
                 }
             }
@@ -293,105 +362,59 @@ class UniversalConnectionController extends Controller
             DB::beginTransaction();
 
             try {
-                $result = null;
-                $message = '';
+                $result     = null;
+                $message    = '';
+                $targetName = $targetUser->usertype === 'company'
+                    ? ($targetUser->company_name ?? $targetUser->name ?? 'company')
+                    : $targetUser->getName();
 
-                if ($entityType == 'user') {
-                    // Handle user connections
-                    $targetUser = User::find($targetId);
-                    
-                    switch ($action) {
-                        case 'follow':
-                            $result = $this->followUser($currentUser->id, $targetId);
-                            $message = 'Follow request sent to ' . $targetUser->name;
-                            break;
-                            
-                        case 'unfollow':
-                            $result = $this->unfollowUser($currentUser->id, $targetId);
-                            $message = 'Unfollowed ' . $targetUser->name;
-                            break;
-                            
-                        case 'accept':
-                            $result = $this->acceptFollowRequest($currentUser->id, $targetId);
-                            $message = 'Accepted follow request from ' . $targetUser->name;
-                            break;
-                            
-                        case 'reject':
-                            $result = $this->rejectFollowRequest($currentUser->id, $targetId);
-                            $message = 'Rejected follow request from ' . $targetUser->name;
-                            break;
-                            
-                        case 'block':
-                            $result = $this->blockUser($currentUser->id, $targetId, $reason);
-                            $message = 'Blocked ' . $targetUser->name;
-                            break;
-                            
-                        case 'unblock':
-                            $result = $this->unblockUser($currentUser->id, $targetId);
-                            $message = 'Unblocked ' . $targetUser->name;
-                            break;
-                    }
-                    
-                    $result['target_details'] = [
-                        'id' => $targetUser->id,
-                        'name' => $targetUser->name,
-                        'usertype' => $targetUser->usertype,
-                        'image' => $targetUser->image ? asset('user_images/' . $targetUser->image) : null,
-                    ];
-                    
-                } else if ($entityType == 'company') {
-                    // Handle company connections
-                    $company = Company::find($targetId);
-                    
-                    switch ($action) {
-                        case 'follow':
-                            $result = $this->followCompany($currentUser->id, $targetId);
-                            $message = 'Started following ' . $company->name;
-                            break;
-                            
-                        case 'unfollow':
-                            $result = $this->unfollowCompany($currentUser->id, $targetId);
-                            $message = 'Unfollowed ' . $company->name;
-                            break;
-                            
-                        case 'accept':
-                            // Companies don't have accept/reject for follows
-                            throw new Exception('Companies cannot accept/reject follow requests');
-                            
-                        case 'reject':
-                            // Companies don't have accept/reject for follows
-                            throw new Exception('Companies cannot accept/reject follow requests');
-                            
-                        case 'block':
-                            $result = $this->blockCompany($currentUser->id, $targetId, $reason);
-                            $message = 'Blocked ' . $company->name;
-                            break;
-                            
-                        case 'unblock':
-                            $result = $this->unblockCompany($currentUser->id, $targetId);
-                            $message = 'Unblocked ' . $company->name;
-                            break;
-                    }
-                    
-                    $result['target_details'] = [
-                        'id' => $company->id,
-                        'name' => $company->name,
-                        'slug' => $company->slug,
-                        'logo' => $company->logo ? asset('company_logos/' . $company->logo) : null,
-                    ];
+                switch ($action) {
+                    case 'follow':
+                        $result  = $this->followUser($currentUser->id, $targetId);
+                        $message = 'Follow request sent to ' . $targetName;
+                        break;
+
+                    case 'unfollow':
+                        $result  = $this->unfollowUser($currentUser->id, $targetId);
+                        $message = 'Unfollowed ' . $targetName;
+                        break;
+
+                    case 'accept':
+                        $result  = $this->acceptFollowRequest($currentUser->id, $targetId);
+                        $message = 'Accepted follow request from ' . $targetName;
+                        break;
+
+                    case 'reject':
+                        $result  = $this->rejectFollowRequest($currentUser->id, $targetId);
+                        $message = 'Rejected follow request from ' . $targetName;
+                        break;
+
+                    case 'block':
+                        $result  = $this->blockUser($currentUser->id, $targetId, $reason);
+                        $message = 'Blocked ' . $targetName;
+                        break;
+
+                    case 'unblock':
+                        $result  = $this->unblockUser($currentUser->id, $targetId);
+                        $message = 'Unblocked ' . $targetName;
+                        break;
                 }
 
+                $result['target_details'] = $this->getEnrichedEntityData($targetUser);
+
                 DB::commit();
+
+                // Store in notifications table + send FCM (follow / accept / reject only)
+                $this->sendConnectionNotification($currentUser, $targetUser, $action);
 
                 return response()->json([
                     'success' => true,
                     'message' => $message,
-                    'data' => array_merge($result, [
-                        'entity_type' => $entityType,
-                        'action' => $action,
+                    'data'    => array_merge($result, [
+                        'action'       => $action,
                         'performed_by' => [
-                            'id' => $currentUser->id,
-                            'name' => $currentUser->name,
+                            'id'   => $currentUser->id,
+                            'name' => $currentUser->getName(),
                         ]
                     ])
                 ]);
@@ -402,104 +425,90 @@ class UniversalConnectionController extends Controller
             }
 
         } catch (Exception $e) {
+            Log::error('Handle connection failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to perform action: ' . $e->getMessage(),
-                'errors' => (object)['server' => $e->getMessage()]
+                'errors'  => (object) ['server' => $e->getMessage()]
             ], 400);
         }
     }
 
-    /**
-     * 4. Get All Connections (Following + Followed Companies)
-     */
+    // ============================================
+    // 4. GET ALL CONNECTIONS
+    // ============================================
+
     public function getAllConnections(Request $request)
     {
         try {
-            $currentUser = Auth::user();
-            
-            $connections = collect();
+            $currentUser  = Auth::user();
+            $connections  = collect();
+            $processedIds = [];
 
-            // Get following users
-            $following = UserConnection::where('follower_id', $currentUser->id)
-                ->where('status', 'accepted')
-                ->with(['following:id,name,usertype,headline,image'])
-                ->get()
-                ->map(function ($conn) {
-                    return [
-                        'entity_type' => 'user',
-                        'connection_type' => 'following',
-                        'id' => $conn->following->id,
-                        'name' => $conn->following->name,
-                        'usertype' => $conn->following->usertype,
-                        'headline' => $conn->following->headline,
-                        'image' => $conn->following->image ? asset('user_images/' . $conn->following->image) : null,
-                        'connected_at' => $conn->created_at,
-                    ];
-                });
+            $allAccepted = UserConnection::where(function ($q) use ($currentUser) {
+                    $q->where('follower_id', $currentUser->id)
+                      ->orWhere('following_id', $currentUser->id);
+                })
+                ->where('status', self::STATUS_ACCEPTED)
+                ->get();
 
-            // Get follower users
-            $followers = UserConnection::where('following_id', $currentUser->id)
-                ->where('status', 'accepted')
-                ->with(['follower:id,name,usertype,headline,image'])
-                ->get()
-                ->map(function ($conn) {
-                    return [
-                        'entity_type' => 'user',
-                        'connection_type' => 'follower',
-                        'id' => $conn->follower->id,
-                        'name' => $conn->follower->name,
-                        'usertype' => $conn->follower->usertype,
-                        'headline' => $conn->follower->headline,
-                        'image' => $conn->follower->image ? asset('user_images/' . $conn->follower->image) : null,
-                        'connected_at' => $conn->created_at,
-                    ];
-                });
+            foreach ($allAccepted as $conn) {
+                $otherId = $conn->follower_id == $currentUser->id
+                    ? $conn->following_id
+                    : $conn->follower_id;
 
-            // Get followed companies
-            $companies = FavouriteCompany::where('user_id', $currentUser->id)
-                ->with(['company:id,name,slug,logo,description'])
-                ->get()
-                ->map(function ($fav) {
-                    return [
-                        'entity_type' => 'company',
-                        'connection_type' => 'following',
-                        'id' => $fav->company->id,
-                        'name' => $fav->company->name,
-                        'slug' => $fav->company->slug,
-                        'logo' => $fav->company->logo ? asset('company_logos/' . $fav->company->logo) : null,
-                        'followed_at' => $fav->created_at,
-                    ];
-                });
+                if (in_array($otherId, $processedIds)) continue;
+                $processedIds[] = $otherId;
 
-            $connections = $connections->merge($followers)->merge($following)->merge($companies);
+                $entity = User::find($otherId);
+                if (!$entity) continue;
+
+                $connectionType = $conn->follower_id == $currentUser->id ? 'following' : 'follower';
+                $enrichedData   = $this->getEnrichedEntityData($entity);
+
+                $connectionData = array_merge($enrichedData, [
+                    'connection_type'        => $connectionType,
+                    'connected_at'           => $conn->created_at,
+                    'connected_at_formatted' => $conn->created_at->diffForHumans(),
+                ]);
+
+                if ($entity->usertype === 'company') {
+                    $connectionData['slug']        = $entity->company_slug;
+                    $connectionData['description'] = $entity->company_description;
+                }
+
+                $connections->push($connectionData);
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'All connections retrieved',
-                'data' => [
+                'data'    => [
                     'connections' => $connections->values(),
-                    'stats' => [
-                        'following_users' => $following->count(),
-                        'follower_users' => $followers->count(),
-                        'following_companies' => $companies->count(),
-                        'total' => $connections->count(),
+                    'stats'       => [
+                        'following' => $connections->where('connection_type', 'following')->count(),
+                        'followers' => $connections->where('connection_type', 'follower')->count(),
+                        'total'     => $connections->count(),
                     ]
                 ]
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get all connections failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get connections',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors'  => (object) ['server' => 'An error occurred']
             ], 500);
         }
     }
 
-    /**
-     * 5. Check Connection Status
-     */
+    // ============================================
+    // 5. CHECK CONNECTION STATUS
+    // ============================================
+
     public function checkStatus(Request $request)
     {
         try {
@@ -512,431 +521,882 @@ class UniversalConnectionController extends Controller
                 foreach ($validator->errors()->toArray() as $field => $messages) {
                     $errors[$field] = $messages[0];
                 }
-                
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => (object)$errors
+                    'errors'  => (object) $errors
                 ], 422);
             }
 
             $currentUser = Auth::user();
-            $targetId = $request->target_id;
+            $targetId    = $request->target_id;
 
-            // Detect entity type
-            $targetType = $this->detectEntityType($targetId);
-            
-            if (!$targetType) {
+            $targetUser = User::find($targetId);
+            if (!$targetUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Target not found',
-                    'errors' => (object)['target_id' => 'Target not found']
+                    'errors'  => (object) ['target_id' => 'Target not found']
                 ], 404);
             }
 
             $status = [
-                'entity_type' => $targetType,
-                'is_following' => false,
-                'is_follower' => false,
-                'is_blocked' => false,
-                'is_blocked_by' => false,
-                'has_pending_request' => false,
+                'entity_type'              => $targetUser->usertype === 'company' ? 'company' : 'user',
+                'is_following'             => false,
+                'is_follower'              => false,
+                'is_blocked'               => false,
+                'is_blocked_by'            => false,
+                'has_pending_request'      => false,
                 'has_pending_request_from' => false,
-                'connection_status' => null,
+                'connection_status'        => null,
             ];
 
-            if ($targetType === 'user') {
-                $connection = UserConnection::where(function($q) use ($currentUser, $targetId) {
-                    $q->where('follower_id', $currentUser->id)
-                      ->where('following_id', $targetId);
-                })->orWhere(function($q) use ($currentUser, $targetId) {
-                    $q->where('follower_id', $targetId)
-                      ->where('following_id', $currentUser->id);
-                })->first();
+            $myRequest    = UserConnection::where('follower_id', $currentUser->id)->where('following_id', $targetId)->first();
+            $theirRequest = UserConnection::where('follower_id', $targetId)->where('following_id', $currentUser->id)->first();
 
-                if ($connection) {
-                    $status['connection_status'] = $connection->status;
-                    $status['is_following'] = $connection->follower_id == $currentUser->id && 
-                                             $connection->status == 'accepted';
-                    $status['is_follower'] = $connection->following_id == $currentUser->id && 
-                                            $connection->status == 'accepted';
-                    $status['is_blocked'] = $connection->follower_id == $currentUser->id && 
-                                           $connection->status == 'blocked';
-                    $status['is_blocked_by'] = $connection->following_id == $currentUser->id && 
-                                              $connection->status == 'blocked';
-                    $status['has_pending_request'] = $connection->follower_id == $currentUser->id && 
-                                                   $connection->status == 'pending';
-                    $status['has_pending_request_from'] = $connection->following_id == $currentUser->id && 
-                                                        $connection->status == 'pending';
-                }
-
-                $status['mutual_count'] = $this->getMutualUserCount($currentUser->id, $targetId);
-                $status['can_accept'] = $status['has_pending_request_from'];
-                $status['can_reject'] = $status['has_pending_request_from'];
-                $status['can_follow'] = !$status['is_following'] && !$status['is_blocked'] && 
-                                      !$status['is_blocked_by'] && !$status['has_pending_request'];
-                $status['can_unfollow'] = $status['is_following'];
-                $status['can_block'] = !$status['is_blocked'];
-                $status['can_unblock'] = $status['is_blocked'];
-
-            } else {
-                // Company
-                $status['is_following'] = FavouriteCompany::where('user_id', $currentUser->id)
-                    ->where('company_id', $targetId)
-                    ->exists();
-                
-                $status['is_blocked'] = UserConnection::where('follower_id', $currentUser->id)
-                    ->where('following_id', $targetId)
-                    ->where('status', 'blocked')
-                    ->exists();
-                
-                $status['can_follow'] = !$status['is_following'] && !$status['is_blocked'];
-                $status['can_unfollow'] = $status['is_following'];
-                $status['can_block'] = !$status['is_blocked'];
-                $status['can_unblock'] = $status['is_blocked'];
+            if ($myRequest) {
+                $status['connection_status']   = $myRequest->status;
+                $status['is_following']        = $myRequest->status == self::STATUS_ACCEPTED;
+                $status['is_blocked']          = $myRequest->status == self::STATUS_BLOCKED;
+                $status['has_pending_request'] = $myRequest->status == self::STATUS_PENDING;
             }
+
+            if ($theirRequest) {
+                $status['is_follower']              = $theirRequest->status == self::STATUS_ACCEPTED;
+                $status['is_blocked_by']            = $theirRequest->status == self::STATUS_BLOCKED;
+                $status['has_pending_request_from'] = $theirRequest->status == self::STATUS_PENDING;
+
+                if (!$myRequest) {
+                    if ($theirRequest->status == self::STATUS_ACCEPTED) {
+                        $status['connection_status'] = 'accepted';
+                    } elseif ($theirRequest->status == self::STATUS_PENDING) {
+                        $status['connection_status'] = 'pending_from_them';
+                    } elseif ($theirRequest->status == self::STATUS_BLOCKED) {
+                        $status['connection_status'] = 'blocked_by_them';
+                    }
+                }
+            }
+
+            if (BlockedUser::isBlocked($currentUser->id, $targetId)) {
+                $status['is_blocked']        = true;
+                $status['connection_status'] = 'blocked';
+            }
+
+            if (BlockedUser::isBlocked($targetId, $currentUser->id)) {
+                $status['is_blocked_by']     = true;
+                $status['connection_status'] = 'blocked_by_them';
+            }
+
+            $status['mutual_count'] = $this->getMutualConnectionCount($currentUser->id, $targetId);
+            $status['can_accept']   = $status['has_pending_request_from'];
+            $status['can_reject']   = $status['has_pending_request_from'];
+            $status['can_follow']   = !$status['is_following'] && !$status['is_blocked']
+                                   && !$status['is_blocked_by'] && !$status['has_pending_request'];
+            $status['can_unfollow'] = $status['is_following'];
+            $status['can_block']    = !$status['is_blocked'] && !$status['is_blocked_by'];
+            $status['can_unblock']  = $status['is_blocked'] || $status['is_blocked_by'];
 
             return response()->json([
                 'success' => true,
                 'message' => 'Connection status retrieved',
-                'data' => $status
+                'data'    => $status
             ]);
 
         } catch (Exception $e) {
+            Log::error('Check status failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to check status',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors'  => (object) ['server' => 'An error occurred']
             ], 500);
         }
     }
 
-    /**
-     * 6. Get Pending Follow Requests
-     */
+    // ============================================
+    // 6. GET PENDING REQUESTS
+    // ============================================
+
     public function getPendingRequests(Request $request)
     {
         try {
-            $currentUser = Auth::user();
-            
+            $currentUser     = Auth::user();
             $pendingRequests = UserConnection::where('following_id', $currentUser->id)
-                ->where('status', 'pending')
-                ->with(['follower:id,name,usertype,headline,image'])
-                ->get()
-                ->map(function ($connection) {
-                    return [
-                        'id' => $connection->id,
-                        'entity_type' => 'user',
-                        'request_from' => [
-                            'id' => $connection->follower->id,
-                            'name' => $connection->follower->name,
-                            'usertype' => $connection->follower->usertype,
-                            'headline' => $connection->follower->headline,
-                            'image' => $connection->follower->image ? asset('user_images/' . $connection->follower->image) : null,
-                        ],
-                        'requested_at' => $connection->created_at,
-                        'mutual_count' => $this->getMutualUserCount($connection->following_id, $connection->follower_id),
-                    ];
-                });
+                ->where('status', self::STATUS_PENDING)
+                ->get();
+
+            $formattedRequests = $pendingRequests->map(function ($connection) {
+                $follower = User::find($connection->follower_id);
+                if (!$follower) return null;
+
+                return [
+                    'id'                     => $connection->id,
+                    'entity_type'            => $follower->usertype === 'company' ? 'company' : 'user',
+                    'request_from'           => $this->getEnrichedEntityData($follower),
+                    'requested_at'           => $connection->created_at,
+                    'requested_at_formatted' => $connection->created_at->diffForHumans(),
+                    'mutual_count'           => $this->getMutualConnectionCount(
+                                                    $connection->following_id,
+                                                    $connection->follower_id
+                                                ),
+                    'connection_status'      => $connection->status,
+                ];
+            })->filter();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Pending requests retrieved',
-                'data' => [
-                    'pending_requests' => $pendingRequests,
-                    'count' => $pendingRequests->count(),
+                'message' => 'Pending requests retrieved successfully',
+                'data'    => [
+                    'pending_requests' => $formattedRequests->values(),
+                    'count'            => $formattedRequests->count(),
                 ]
             ]);
 
         } catch (Exception $e) {
+            Log::error('Get pending requests failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get pending requests',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors'  => (object) ['server' => 'An error occurred']
             ], 500);
         }
     }
 
     // ============================================
-    // HELPER METHODS
+    // 7. GET BLOCK LIST
     // ============================================
 
-    /**
-     * Helper: Auto-detect entity type (user or company)
-     */
-    private function detectEntityType($id)
+    public function getBlockList(Request $request)
     {
-        // Check if it's a user
-        if (User::where('id', $id)->where('is_active', 1)->exists()) {
-            return 'user';
+        try {
+            $currentUser = Auth::user();
+            $perPage     = $request->get('per_page', 20);
+            $page        = $request->get('page', 1);
+
+            $blockedInConnections = UserConnection::where('follower_id', $currentUser->id)
+                ->where('status', self::STATUS_BLOCKED)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $blockedInBlockedTable = BlockedUser::where('blocker_id', $currentUser->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $blockedItems = [];
+
+            foreach ($blockedInConnections as $connection) {
+                $entity = User::find($connection->following_id);
+                if (!$entity) continue;
+                $entityData     = $this->getEnrichedEntityData($entity);
+                $blockedItems[] = array_merge($entityData, [
+                    'id'                   => $connection->id,
+                    'blocked_id'           => $entityData['id'],
+                    'blocked_at'           => $connection->created_at,
+                    'blocked_at_formatted' => $connection->created_at->diffForHumans(),
+                    'reason'               => $connection->reason ?? null,
+                    'source'               => 'connection',
+                ]);
+            }
+
+            foreach ($blockedInBlockedTable as $block) {
+                $entity = User::find($block->blocked_id);
+                if (!$entity) continue;
+                $entityData     = $this->getEnrichedEntityData($entity);
+                $blockedItems[] = array_merge($entityData, [
+                    'id'                   => $block->id,
+                    'blocked_id'           => $entityData['id'],
+                    'blocked_at'           => $block->created_at,
+                    'blocked_at_formatted' => $block->created_at->diffForHumans(),
+                    'reason'               => $block->reason ?? null,
+                    'source'               => 'blocked_users',
+                ]);
+            }
+
+            $uniqueBlocked   = collect($blockedItems)->unique('blocked_id')->values();
+            $total           = $uniqueBlocked->count();
+            $paginatedBlocks = $uniqueBlocked->slice(($page - 1) * $perPage, $perPage)->values();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Block list retrieved successfully',
+                'data'    => [
+                    'blocked_items' => $paginatedBlocks,
+                    'pagination'    => [
+                        'current_page' => $page,
+                        'per_page'     => $perPage,
+                        'total'        => $total,
+                        'last_page'    => (int) ceil($total / $perPage),
+                    ]
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Get block list failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get block list',
+                'errors'  => (object) ['server' => 'An error occurred']
+            ], 500);
         }
-        
-        // Check if it's a company
-        if (Company::where('id', $id)->where('is_active', 1)->exists()) {
-            return 'company';
-        }
-        
-        return null;
     }
 
-    /**
-     * Helper: Get mutual user count
-     */
-    private function getMutualUserCount($userId1, $userId2)
+    // ============================================
+    // 8. UNBLOCK FROM LIST
+    // ============================================
+
+    public function unblockFromList($id)
     {
-        $user1Following = UserConnection::where('follower_id', $userId1)
-            ->where('status', 'accepted')
-            ->pluck('following_id')
-            ->toArray();
-        
-        $user2Following = UserConnection::where('follower_id', $userId2)
-            ->where('status', 'accepted')
-            ->pluck('following_id')
-            ->toArray();
-        
-        return count(array_intersect($user1Following, $user2Following));
+        try {
+            $currentUser = Auth::user();
+
+            $connection = UserConnection::where('id', $id)
+                ->where('follower_id', $currentUser->id)
+                ->where('status', self::STATUS_BLOCKED)
+                ->first();
+
+            if ($connection) {
+                $targetId = $connection->following_id;
+                $connection->delete();
+                $targetUser = User::find($targetId);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Unblocked successfully',
+                    'data'    => [
+                        'unblocked_id' => $targetId,
+                        'entity_type'  => $targetUser && $targetUser->usertype === 'company' ? 'company' : 'user',
+                    ]
+                ]);
+            }
+
+            $block = BlockedUser::where('id', $id)->where('blocker_id', $currentUser->id)->first();
+
+            if ($block) {
+                $targetId = $block->blocked_id;
+                $block->delete();
+                $targetUser = User::find($targetId);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Unblocked successfully',
+                    'data'    => [
+                        'unblocked_id' => $targetId,
+                        'entity_type'  => $targetUser && $targetUser->usertype === 'company' ? 'company' : 'user',
+                    ]
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Blocked item not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            Log::error('Unblock from list failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to unblock',
+                'errors'  => (object) ['server' => 'An error occurred']
+            ], 500);
+        }
     }
 
-    /**
-     * Helper: Get user connection status
-     */
+    // ============================================
+    // 9. GET CONNECTION STATS
+    // ============================================
+
+    public function getConnectionStats(Request $request)
+    {
+        try {
+            $currentUser = Auth::user();
+
+            $allAccepted = UserConnection::where(function ($q) use ($currentUser) {
+                    $q->where('follower_id', $currentUser->id)
+                      ->orWhere('following_id', $currentUser->id);
+                })
+                ->where('status', self::STATUS_ACCEPTED)
+                ->get();
+
+            $uniqueConnections = [];
+            foreach ($allAccepted as $conn) {
+                $otherId = $conn->follower_id == $currentUser->id
+                    ? $conn->following_id
+                    : $conn->follower_id;
+                $uniqueConnections[$otherId] = true;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Connection stats retrieved',
+                'data'    => [
+                    'stats' => [
+                        'total_connections' => count($uniqueConnections),
+                        'pending_sent'      => UserConnection::where('follower_id', $currentUser->id)
+                                                ->where('status', self::STATUS_PENDING)->count(),
+                        'pending_received'  => UserConnection::where('following_id', $currentUser->id)
+                                                ->where('status', self::STATUS_PENDING)->count(),
+                        'blocked'           => UserConnection::where('follower_id', $currentUser->id)
+                                                ->where('status', self::STATUS_BLOCKED)->count()
+                                              + BlockedUser::where('blocker_id', $currentUser->id)->count(),
+                    ]
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Get connection stats failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get connection stats',
+                'errors'  => (object) ['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+
+    // ============================================
+    // 10. GLOBAL USER SEARCH
+    // ============================================
+    
+    public function globalSearch(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'query'    => 'nullable|string|max:255',
+                'usertype' => 'nullable|in:user,company,student,professional',
+                'per_page' => 'nullable|integer|min:1|max:100',
+                'page'     => 'nullable|integer|min:1',
+            ]);
+    
+            if ($validator->fails()) {
+                $errors = [];
+                foreach ($validator->errors()->toArray() as $field => $messages) {
+                    $errors[$field] = $messages[0];
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors'  => (object) $errors
+                ], 422);
+            }
+    
+            $currentUser = Auth::user();
+            $query       = trim($request->get('query', ''));
+            $usertype    = $request->get('usertype');
+            $perPage     = $request->get('per_page', 20);
+            $page        = $request->get('page', 1);
+    
+            if ($query === '' && !$usertype) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please provide a search query or usertype filter.',
+                    'errors'  => (object) ['query' => 'Search query or usertype is required.']
+                ], 422);
+            }
+    
+            $blockedByMe   = BlockedUser::where('blocker_id', $currentUser->id)->pluck('blocked_id')->toArray();
+            $blockedByThem = BlockedUser::where('blocked_id', $currentUser->id)->pluck('blocker_id')->toArray();
+            $excludedIds   = array_unique(array_merge($blockedByMe, $blockedByThem, [$currentUser->id]));
+    
+            $myConnectionIds = UserConnection::where(function ($q) use ($currentUser) {
+                    $q->where('follower_id', $currentUser->id)
+                      ->orWhere('following_id', $currentUser->id);
+                })
+                ->where('status', self::STATUS_ACCEPTED)
+                ->get()
+                ->map(fn($c) => $c->follower_id == $currentUser->id ? $c->following_id : $c->follower_id)
+                ->toArray();
+    
+            $dbQuery = User::where('is_active', 1)
+                ->where('name', '!=', 'New User')
+                ->where('name', '!=', 'New Company')
+                ->where('is_company_profile_completed', 1)
+                ->whereNotIn('id', $excludedIds)
+                ->select(
+                    'id', 'first_name', 'last_name', 'name',
+                    'company_name', 'company_slug', 'company_description', 'company_logo',
+                    'email', 'usertype', 'headline', 'image',
+                    'visibility_control', 'post_visibility_control', 'message_visibility_control'
+                );
+    
+            if ($usertype) {
+                $dbQuery->where('usertype', $usertype);
+            }
+    
+            if ($query !== '') {
+                $lowerQuery = strtolower($query);
+                $dbQuery->where(function ($q) use ($lowerQuery) {
+                    $like = '%' . $lowerQuery . '%';
+                    $q->whereRaw('LOWER(first_name)  LIKE ?', [$like])
+                      ->orWhereRaw('LOWER(last_name)   LIKE ?', [$like])
+                      ->orWhereRaw('LOWER(name)         LIKE ?', [$like])
+                      ->orWhereRaw('LOWER(company_name) LIKE ?', [$like])
+                      ->orWhereRaw('LOWER(email)        LIKE ?', [$like])
+                      ->orWhereRaw(
+                          "LOWER(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) LIKE ?",
+                          [$like]
+                      );
+                });
+            }
+    
+            $dbQuery->where(function ($q) use ($myConnectionIds) {
+                $q->where('visibility_control', 'public')
+                  ->orWhere(function ($q2) use ($myConnectionIds) {
+                      $q2->where('visibility_control', 'connections')
+                         ->whereIn('id', $myConnectionIds);
+                  });
+            });
+    
+            $total = (clone $dbQuery)->count();
+    
+            $results = $dbQuery
+                ->when($query !== '', function ($q) use ($query) {
+                    $q->orderByRaw("
+                        CASE
+                            WHEN LOWER(first_name)   LIKE ? THEN 0
+                            WHEN LOWER(name)         LIKE ? THEN 0
+                            WHEN LOWER(company_name) LIKE ? THEN 0
+                            ELSE 1
+                        END
+                    ", [
+                        strtolower($query) . '%',
+                        strtolower($query) . '%',
+                        strtolower($query) . '%',
+                    ]);
+                })
+                ->orderBy('first_name')
+                ->orderBy('name')
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
+    
+            $formatted = $results->map(function ($user) use ($currentUser) {
+                $enriched         = $this->getEnrichedEntityData($user);
+                $connectionStatus = $this->checkIfConnected($currentUser, $user->id);
+    
+                $extra = [
+                    'connection_status' => $connectionStatus,
+                    'mutual_count'      => $this->getMutualConnectionCount($currentUser->id, $user->id),
+                ];
+    
+                if ($user->usertype === 'company') {
+                    $extra['followers_count'] = UserConnection::where('following_id', $user->id)
+                        ->where('status', self::STATUS_ACCEPTED)->count();
+                }
+    
+                return array_merge($enriched, $extra);
+            });
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Search results retrieved successfully',
+                'data'    => [
+                    'results'         => $formatted->values(),
+                    'pagination'      => [
+                        'current_page' => $page,
+                        'per_page'     => $perPage,
+                        'total'        => $total,
+                        'last_page'    => (int) ceil($total / $perPage),
+                    ],
+                    'filters_applied' => [
+                        'query'    => $query ?: null,
+                        'usertype' => $usertype ?: null,
+                    ],
+                ]
+            ]);
+    
+        } catch (Exception $e) {
+           
+    
+            return response()->json([
+                'success' => false,
+                'message' => 'Search failed',
+                'errors'  => (object) ['server' => 'An error occurred']
+            ], 500);
+        }
+    }
+
+    // public function globalSearch(Request $request)
+    // {
+    //     try {
+    //         $validator = Validator::make($request->all(), [
+    //             'query'    => 'nullable|string|max:255',
+    //             'usertype' => 'nullable|in:user,company,student,professional',
+    //             'per_page' => 'nullable|integer|min:1|max:100',
+    //             'page'     => 'nullable|integer|min:1',
+    //         ]);
+
+    //         if ($validator->fails()) {
+    //             $errors = [];
+    //             foreach ($validator->errors()->toArray() as $field => $messages) {
+    //                 $errors[$field] = $messages[0];
+    //             }
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Validation failed',
+    //                 'errors'  => (object) $errors
+    //             ], 422);
+    //         }
+
+    //         $currentUser = Auth::user();
+    //         $query       = trim($request->get('query', ''));
+    //         $usertype    = $request->get('usertype');
+    //         $perPage     = $request->get('per_page', 20);
+    //         $page        = $request->get('page', 1);
+
+    //         if ($query === '' && !$usertype) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Please provide a search query or usertype filter.',
+    //                 'errors'  => (object) ['query' => 'Search query or usertype is required.']
+    //             ], 422);
+    //         }
+
+    //         $blockedByMe   = BlockedUser::where('blocker_id', $currentUser->id)->pluck('blocked_id')->toArray();
+    //         $blockedByThem = BlockedUser::where('blocked_id', $currentUser->id)->pluck('blocker_id')->toArray();
+    //         $excludedIds   = array_unique(array_merge($blockedByMe, $blockedByThem, [$currentUser->id]));
+
+    //         $myConnectionIds = UserConnection::where(function ($q) use ($currentUser) {
+    //                 $q->where('follower_id', $currentUser->id)
+    //                   ->orWhere('following_id', $currentUser->id);
+    //             })
+    //             ->where('status', self::STATUS_ACCEPTED)
+    //             ->get()
+    //             ->map(fn($c) => $c->follower_id == $currentUser->id ? $c->following_id : $c->follower_id)
+    //             ->toArray();
+
+           
+            
+    //         $dbQuery = User::where('is_active', 1)
+    //             ->where('name', '!=', 'New User')
+    //             ->where('name', '!=', 'New Company')
+    //             ->whereNotIn('id', $excludedIds)
+    //             ->select(
+    //                 'id', 'first_name', 'last_name', 'name',
+    //                 'company_name', 'company_slug', 'company_description', 'company_logo',
+    //                 'email', 'usertype', 'headline', 'image',
+    //                 'visibility_control', 'post_visibility_control', 'message_visibility_control'
+    //             );
+
+    //         if ($usertype) {
+    //             $dbQuery->where('usertype', $usertype);
+    //         }
+
+    //         if ($query !== '') {
+    //             $dbQuery->where(function ($q) use ($query) {
+    //                 $like = '%' . $query . '%';
+    //                 $q->where('first_name',     'LIKE', $like)
+    //                   ->orWhere('last_name',    'LIKE', $like)
+    //                   ->orWhere('name',         'LIKE', $like)
+    //                   ->orWhere('company_name', 'LIKE', $like)
+    //                   ->orWhere('email',        'LIKE', $like)
+    //                   ->orWhereRaw(
+    //                       "CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) LIKE ?",
+    //                       [$like]
+    //                   );
+    //             });
+    //         }
+
+    //         $dbQuery->where(function ($q) use ($myConnectionIds) {
+    //             $q->where('visibility_control', 'public')
+    //               ->orWhere(function ($q2) use ($myConnectionIds) {
+    //                   $q2->where('visibility_control', 'connections')
+    //                      ->whereIn('id', $myConnectionIds);
+    //               });
+    //         });
+
+    //         $total = (clone $dbQuery)->count();
+
+    //         $results = $dbQuery
+    //             ->when($query !== '', function ($q) use ($query) {
+    //                 $q->orderByRaw("
+    //                     CASE
+    //                         WHEN first_name   LIKE ? THEN 0
+    //                         WHEN name         LIKE ? THEN 0
+    //                         WHEN company_name LIKE ? THEN 0
+    //                         ELSE 1
+    //                     END
+    //                 ", [$query . '%', $query . '%', $query . '%']);
+    //             })
+    //             ->orderBy('first_name')
+    //             ->orderBy('name')
+    //             ->offset(($page - 1) * $perPage)
+    //             ->limit($perPage)
+    //             ->get();
+
+    //         $formatted = $results->map(function ($user) use ($currentUser) {
+    //             $enriched         = $this->getEnrichedEntityData($user);
+    //             $connectionStatus = $this->checkIfConnected($currentUser, $user->id);
+
+    //             $extra = [
+    //                 'connection_status' => $connectionStatus,
+    //                 'mutual_count'      => $this->getMutualConnectionCount($currentUser->id, $user->id),
+    //             ];
+
+    //             if ($user->usertype === 'company') {
+    //                 $extra['followers_count'] = UserConnection::where('following_id', $user->id)
+    //                     ->where('status', self::STATUS_ACCEPTED)->count();
+    //             }
+
+    //             return array_merge($enriched, $extra);
+    //         });
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Search results retrieved successfully',
+    //             'data'    => [
+    //                 'results'         => $formatted->values(),
+    //                 'pagination'      => [
+    //                     'current_page' => $page,
+    //                     'per_page'     => $perPage,
+    //                     'total'        => $total,
+    //                     'last_page'    => (int) ceil($total / $perPage),
+    //                 ],
+    //                 'filters_applied' => [
+    //                     'query'    => $query ?: null,
+    //                     'usertype' => $usertype ?: null,
+    //                 ],
+    //             ]
+    //         ]);
+
+    //     } catch (Exception $e) {
+    //         Log::error('Global search failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Search failed',
+    //             'errors'  => (object) ['server' => 'An error occurred']
+    //         ], 500);
+    //     }
+    // }
+
+    // ============================================
+    // PRIVATE ACTION HELPERS
+    // ============================================
+
+    private function getBlockedUserIds($userId)
+    {
+        return BlockedUser::where('blocker_id', $userId)->pluck('blocked_id')->toArray();
+    }
+
+    private function getBlockerIds($userId)
+    {
+        return BlockedUser::where('blocked_id', $userId)->pluck('blocker_id')->toArray();
+    }
+
+    private function isUserBlocked($currentUserId, $targetUserId)
+    {
+        return BlockedUser::isBlocked($currentUserId, $targetUserId)
+            || BlockedUser::isBlocked($targetUserId, $currentUserId);
+    }
+
+    private function getMutualConnectionCount($userId1, $userId2)
+    {
+        $user1Connections = UserConnection::where(function ($q) use ($userId1) {
+                $q->where('follower_id', $userId1)->orWhere('following_id', $userId1);
+            })
+            ->where('status', self::STATUS_ACCEPTED)
+            ->get()
+            ->map(fn($conn) => $conn->follower_id == $userId1 ? $conn->following_id : $conn->follower_id)
+            ->toArray();
+
+        $user2Connections = UserConnection::where(function ($q) use ($userId2) {
+                $q->where('follower_id', $userId2)->orWhere('following_id', $userId2);
+            })
+            ->where('status', self::STATUS_ACCEPTED)
+            ->get()
+            ->map(fn($conn) => $conn->follower_id == $userId2 ? $conn->following_id : $conn->follower_id)
+            ->toArray();
+
+        return count(array_intersect($user1Connections, $user2Connections));
+    }
+
+    private function findAnyConnection($userId1, $userId2)
+    {
+        return UserConnection::where(function ($q) use ($userId1, $userId2) {
+                $q->where('follower_id', $userId1)->where('following_id', $userId2);
+            })
+            ->orWhere(function ($q) use ($userId1, $userId2) {
+                $q->where('follower_id', $userId2)->where('following_id', $userId1);
+            })
+            ->first();
+    }
+
     private function getUserConnectionStatus($currentUserId, $targetUserId)
     {
         $connection = UserConnection::where('follower_id', $currentUserId)
             ->where('following_id', $targetUserId)
             ->first();
-        
+
         return $connection ? $connection->status : 'none';
     }
 
-    /**
-     * Helper: Follow User
-     */
+    private function checkIfConnected($currentUser, $targetId)
+    {
+        if (!$targetId) return 'none';
+        if ($currentUser->id == $targetId) return 'self';
+
+        if (BlockedUser::isBlocked($currentUser->id, $targetId)) return 'blocked';
+        if (BlockedUser::isBlocked($targetId, $currentUser->id)) return 'blocked_by_them';
+
+        $connection = UserConnection::where(function ($query) use ($currentUser, $targetId) {
+                $query->where('follower_id', $currentUser->id)->where('following_id', $targetId);
+            })
+            ->orWhere(function ($query) use ($currentUser, $targetId) {
+                $query->where('following_id', $currentUser->id)->where('follower_id', $targetId);
+            })
+            ->first();
+
+        if ($connection) {
+            if ($connection->follower_id == $currentUser->id) {
+                return $connection->status;
+            }
+            if ($connection->status == self::STATUS_ACCEPTED) return 'accepted';
+            if ($connection->status == self::STATUS_PENDING)  return 'pending_from_them';
+            if ($connection->status == self::STATUS_BLOCKED)  return 'blocked_by_them';
+        }
+
+        return 'none';
+    }
+
     private function followUser($followerId, $followingId)
     {
-        $existing = UserConnection::where('follower_id', $followerId)
-            ->where('following_id', $followingId)
+        $reversePending = UserConnection::where('follower_id', $followingId)
+            ->where('following_id', $followerId)
+            ->where('status', self::STATUS_PENDING)
+            ->first();
+
+        if ($reversePending) {
+            $reversePending->status = self::STATUS_ACCEPTED;
+            $reversePending->save();
+            return ['connection_id' => $reversePending->id, 'status' => self::STATUS_ACCEPTED, 'action' => 'connection_established'];
+        }
+
+        $existing = UserConnection::where(function ($q) use ($followerId, $followingId) {
+                $q->where('follower_id', $followerId)->where('following_id', $followingId);
+            })
+            ->orWhere(function ($q) use ($followerId, $followingId) {
+                $q->where('follower_id', $followingId)->where('following_id', $followerId);
+            })
             ->first();
 
         if ($existing) {
-            if ($existing->status == 'blocked') {
-                throw new Exception('Cannot follow blocked user');
-            }
-            if ($existing->status == 'accepted') {
-                throw new Exception('Already following');
-            }
-            if ($existing->status == 'pending') {
-                throw new Exception('Request already sent');
+            if ($existing->status == self::STATUS_BLOCKED)  throw new Exception('Cannot follow blocked user');
+            if ($existing->status == self::STATUS_ACCEPTED) throw new Exception('Already connected');
+            if ($existing->status == self::STATUS_PENDING) {
+                throw new Exception($existing->follower_id == $followerId
+                    ? 'Request already sent'
+                    : 'Pending request from target exists');
             }
         }
 
-        $connection = UserConnection::updateOrCreate(
-            ['follower_id' => $followerId, 'following_id' => $followingId],
-            ['status' => 'pending']
-        );
+        $targetUser    = User::find($followingId);
+        $followingType = $targetUser && $targetUser->usertype === 'company' ? 'company' : 'user';
 
-        return [
-            'connection_id' => $connection->id,
-            'status' => $connection->status,
-            'action' => 'follow_request_sent'
-        ];
+        $connection = UserConnection::create([
+            'follower_id'    => $followerId,
+            'follower_type'  => 'user',
+            'following_id'   => $followingId,
+            'following_type' => $followingType,
+            'status'         => self::STATUS_PENDING,
+        ]);
+
+        return ['connection_id' => $connection->id, 'status' => self::STATUS_PENDING, 'action' => 'follow_request_sent'];
     }
 
-    /**
-     * Helper: Unfollow User
-     */
     private function unfollowUser($followerId, $followingId)
     {
-        $connection = UserConnection::where('follower_id', $followerId)
-            ->where('following_id', $followingId)
-            ->first();
+        UserConnection::where(function ($q) use ($followerId, $followingId) {
+                $q->where('follower_id', $followerId)->where('following_id', $followingId);
+            })
+            ->orWhere(function ($q) use ($followerId, $followingId) {
+                $q->where('follower_id', $followingId)->where('following_id', $followerId);
+            })
+            ->delete();
 
-        if (!$connection) {
-            throw new Exception('Not following this user');
-        }
-
-        $connection->delete();
-
-        return [
-            'unfollowed_id' => $followingId,
-            'action' => 'unfollowed'
-        ];
+        return ['unfollowed_id' => $followingId, 'action' => 'unfollowed'];
     }
 
-    /**
-     * Helper: Accept Follow Request
-     */
     private function acceptFollowRequest($userId, $followerId)
     {
         $connection = UserConnection::where('follower_id', $followerId)
             ->where('following_id', $userId)
-            ->where('status', 'pending')
+            ->where('status', self::STATUS_PENDING)
             ->first();
 
-        if (!$connection) {
-            throw new Exception('No pending follow request found');
-        }
+        if (!$connection) throw new Exception('No pending follow request found');
 
-        $connection->status = 'accepted';
+        $connection->status = self::STATUS_ACCEPTED;
         $connection->save();
 
-        return [
-            'connection_id' => $connection->id,
-            'status' => $connection->status,
-            'action' => 'request_accepted'
-        ];
+        // Remove any reverse pending to keep a single accepted record
+        UserConnection::where('follower_id', $userId)
+            ->where('following_id', $followerId)
+            ->where('status', self::STATUS_PENDING)
+            ->delete();
+
+        return ['connection_id' => $connection->id, 'status' => self::STATUS_ACCEPTED, 'action' => 'request_accepted'];
     }
 
-    /**
-     * Helper: Reject Follow Request
-     */
     private function rejectFollowRequest($userId, $followerId)
     {
         $connection = UserConnection::where('follower_id', $followerId)
             ->where('following_id', $userId)
-            ->where('status', 'pending')
+            ->where('status', self::STATUS_PENDING)
             ->first();
 
-        if (!$connection) {
-            throw new Exception('No pending follow request found');
-        }
+        if (!$connection) throw new Exception('No pending follow request found');
 
         $connection->delete();
 
-        return [
-            'rejected_user_id' => $followerId,
-            'action' => 'request_rejected'
-        ];
+        return ['rejected_user_id' => $followerId, 'action' => 'request_rejected'];
     }
 
-    /**
-     * Helper: Block User
-     */
     private function blockUser($blockerId, $blockedId, $reason = null)
     {
-        $connection = UserConnection::updateOrCreate(
-            ['follower_id' => $blockerId, 'following_id' => $blockedId],
-            ['status' => 'blocked']
-        );
+        $connection = UserConnection::where(function ($q) use ($blockerId, $blockedId) {
+                $q->where('follower_id', $blockerId)->where('following_id', $blockedId);
+            })
+            ->orWhere(function ($q) use ($blockerId, $blockedId) {
+                $q->where('follower_id', $blockedId)->where('following_id', $blockerId);
+            })
+            ->first();
 
-        return [
+        if ($connection) {
+            $connection->status = self::STATUS_BLOCKED;
+            $connection->save();
+        }
+
+        $block = BlockedUser::create([
+            'blocker_id' => $blockerId,
             'blocked_id' => $blockedId,
-            'reason' => $reason,
-            'action' => 'blocked'
-        ];
-    }
-
-    /**
-     * Helper: Unblock User
-     */
-    private function unblockUser($blockerId, $blockedId)
-    {
-        $connection = UserConnection::where('follower_id', $blockerId)
-            ->where('following_id', $blockedId)
-            ->where('status', 'blocked')
-            ->first();
-
-        if (!$connection) {
-            throw new Exception('User not blocked');
-        }
-
-        $connection->delete();
-
-        return [
-            'unblocked_id' => $blockedId,
-            'action' => 'unblocked'
-        ];
-    }
-
-    /**
-     * Helper: Follow Company
-     */
-    private function followCompany($userId, $companyId)
-    {
-        $existing = FavouriteCompany::where('user_id', $userId)
-            ->where('company_id', $companyId)
-            ->first();
-
-        if ($existing) {
-            throw new Exception('Already following this company');
-        }
-
-        $company = Company::find($companyId);
-        $favourite = FavouriteCompany::create([
-            'user_id' => $userId,
-            'company_slug' => $company->slug,
-            'company_id' => $companyId,
+            'reason'     => $reason,
         ]);
 
-        return [
-            'follow_id' => $favourite->id,
-            'action' => 'company_followed'
-        ];
+        return ['blocked_id' => $blockedId, 'reason' => $reason, 'action' => 'blocked', 'block_id' => $block->id];
     }
 
-    /**
-     * Helper: Unfollow Company
-     */
-    private function unfollowCompany($userId, $companyId)
+    private function unblockUser($blockerId, $blockedId)
     {
-        $favourite = FavouriteCompany::where('user_id', $userId)
-            ->where('company_id', $companyId)
+        $connection = UserConnection::where(function ($q) use ($blockerId, $blockedId) {
+                $q->where('follower_id', $blockerId)->where('status', self::STATUS_BLOCKED)->where('following_id', $blockedId);
+            })
+            ->orWhere(function ($q) use ($blockerId, $blockedId) {
+                $q->where('follower_id', $blockedId)->where('status', self::STATUS_BLOCKED)->where('following_id', $blockerId);
+            })
             ->first();
 
-        if (!$favourite) {
-            throw new Exception('Not following this company');
+        if ($connection) {
+            $connection->status = self::STATUS_ACCEPTED;
+            $connection->save();
         }
 
-        $favourite->delete();
+        $deleted = BlockedUser::where('blocker_id', $blockerId)->where('blocked_id', $blockedId)->delete();
 
-        return [
-            'unfollowed_company_id' => $companyId,
-            'action' => 'company_unfollowed'
-        ];
-    }
+        if (!$deleted) throw new Exception('User not blocked');
 
-    /**
-     * Helper: Block Company
-     */
-    private function blockCompany($userId, $companyId, $reason = null)
-    {
-        // Store company blocks in user_connections table
-        $connection = UserConnection::updateOrCreate(
-            ['follower_id' => $userId, 'following_id' => $companyId],
-            ['status' => 'blocked']
-        );
-
-        // Also unfollow if currently following
-        FavouriteCompany::where('user_id', $userId)
-            ->where('company_id', $companyId)
-            ->delete();
-
-        return [
-            'blocked_company_id' => $companyId,
-            'reason' => $reason,
-            'action' => 'company_blocked'
-        ];
-    }
-
-    /**
-     * Helper: Unblock Company
-     */
-    private function unblockCompany($userId, $companyId)
-    {
-        $connection = UserConnection::where('follower_id', $userId)
-            ->where('following_id', $companyId)
-            ->where('status', 'blocked')
-            ->first();
-
-        if (!$connection) {
-            throw new Exception('Company not blocked');
-        }
-
-        $connection->delete();
-
-        return [
-            'unblocked_company_id' => $companyId,
-            'action' => 'company_unblocked'
-        ];
+        return ['unblocked_id' => $blockedId, 'action' => 'unblocked'];
     }
 }

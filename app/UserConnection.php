@@ -18,6 +18,8 @@ class UserConnection extends Model
     protected $fillable = [
         'follower_id',
         'following_id',
+        'follower_type',
+        'following_type',
         'status',
         'created_at',
         'updated_at'

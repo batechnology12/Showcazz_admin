@@ -34,9 +34,7 @@
         </div>
         <div class="form-actions">
             <button type="submit" class="btn green uppercase">Login</button>
-            <label class="rememberme check">
-                <input type="checkbox" name="remember" />Remember </label>
-            <a class="forget-password" href="{{ route('admin.password.request') }}">Forgot Password?</a>
+           
         </div>                                
     </form>
     <!-- END LOGIN FORM -->

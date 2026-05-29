@@ -63,6 +63,8 @@ class Company extends Authenticatable
         'verified',
         'unique_id',
         'visibility_control',
+        'post_visibility_control',
+        'mesage_visibility_control',
         'website',
         'linkedin_url',
         'gst_number',
@@ -75,6 +77,7 @@ class Company extends Authenticatable
         'no_of_offices',
         'no_of_employees',
         'established_in',
+        'last_activity',
         'fax',
         'phone',
         'logo',
@@ -122,7 +125,8 @@ class Company extends Authenticatable
         'name_of_legal_representative',
         'identity_number',
         'contact_name',
-        'contact_email'
+        'contact_email',
+        'firebase_token'
     ];
     
     
@@ -141,6 +145,38 @@ class Company extends Authenticatable
 
         $this->notify(new CompanyResetPassword($token));
 
+    }
+    
+    
+     public function posts()
+    {
+        return $this->hasMany(Post::class, 'user_id', 'id');
+    }
+
+    /**
+     * Get only job posts (category_id = 5)
+     */
+    public function jobPosts()
+    {
+        return $this->posts()->where('category_id', 5);
+    }
+
+    /**
+     * Get only regular posts (category_id != 5)
+     */
+    public function regularPosts()
+    {
+        return $this->posts()->where('category_id', '!=', 5);
+    }
+
+    /**
+     * Get posts with engagement statistics
+     */
+    public function postsWithStats()
+    {
+        return $this->posts()
+            ->withCount(['likes', 'comments', 'shares'])
+            ->with(['postType', 'category', 'subcategory']);
     }
 
 

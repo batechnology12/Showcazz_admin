@@ -35,7 +35,8 @@ class UserMessage extends Model
         'is_read',
         'read_at',
         'message_type',
-        'attachments'
+        'attachments',
+       
     ];
     
     protected $casts = [
@@ -126,6 +127,11 @@ class UserMessage extends Model
     public function scopeOfType($query, $typeId)
     {
         return $query->where('chat_type_id', $typeId);
+    }
+    
+     protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->setTimezone(new \DateTimeZone('Asia/Kolkata'))->format('Y-m-d H:i:s');
     }
     
     /**

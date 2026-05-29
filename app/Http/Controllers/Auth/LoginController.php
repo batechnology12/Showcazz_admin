@@ -101,6 +101,8 @@ use AuthenticatesUsers;
     }
 
     public function companyLogin(){
+        
+        
         return view('auth.company-login');
     }
     

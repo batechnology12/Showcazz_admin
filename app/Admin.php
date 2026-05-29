@@ -57,6 +57,18 @@ class Admin extends Authenticatable
         return false;
     }
 
+    public function hasPermission($permission_name)
+    {
+        $role = $this->getAdminUserRole();
+        
+        if (!$role) {
+            return false;
+        }
+
+        // Check if the assigned role has the requested permission
+        return $role->permissions()->where('name', $permission_name)->exists();
+    }
+
     public function getAdminUserRole()
     {
         return $this->role()->getResults();

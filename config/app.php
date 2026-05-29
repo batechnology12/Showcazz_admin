@@ -11,7 +11,7 @@ return [
       | any other location as required by the application or its packages.
       |
      */
-    'name' => env('APP_NAME', 'job_portal'),
+    'name' => env('APP_NAME', 'Showcazz'),
     /*
       |--------------------------------------------------------------------------
       | Application Environment
@@ -55,7 +55,7 @@ return [
       | ahead and set this to a sensible default for you out of the box.
       |
      */
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Kolkata',
     /*
       |--------------------------------------------------------------------------
       | Application Locale Configuration

@@ -39,6 +39,7 @@ class AdminController extends Controller
      */
     public function indexAdminUsers()
     {
+       
         return view('admin.admin.index');
     }
 
@@ -61,10 +62,10 @@ class AdminController extends Controller
         $user->role_id = $request->role_id;
         $user->save();
         /*         * ******************** */
-        Mail::send('admin.admin.emails.new_admin_user_created', ['user' => $user], function ($msg) use ($user) {
-            $msg->from(config('mail.recieve_to.address'), config('mail.recieve_to.name'));
-            $msg->to($user->email, $user->name)->subject('Please set your password to ' . config('app.name') . ' admin panel.');
-        });
+        // Mail::send('admin.admin.emails.new_admin_user_created', ['user' => $user], function ($msg) use ($user) {
+        //     $msg->from(config('mail.recieve_to.address'), config('mail.recieve_to.name'));
+        //     $msg->to($user->email, $user->name)->subject('Please set your password to ' . config('app.name') . ' admin panel.');
+        // });
         /*         * ******************** */
         flash('New Admin User has been created!')->success();
         return \Redirect::route('edit.admin.user', array($user->id));

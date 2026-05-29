@@ -438,7 +438,7 @@ public function updateCompany($id, CompanyFormRequest $request)
 					</button>
 					<ul class="dropdown-menu">
 						<li>
-							<a href="' . route('list.jobs', ['company_id' => $companies->id]) . '" target="_blank"><i class="fa fa-list" aria-hidden="true"></i>List Jobs</a>
+							<a href="' . route('list.jobs', ['company_id' => $companies->id]) . '" target="_blank"><i class="fa fa-list" aria-hidden="true"></i>List posts</a>
 						</li>
 						<li>
 							<a href="' . route('edit.company', ['id' => $companies->id]) . '"><i class="fa fa-pencil" aria-hidden="true"></i>Edit</a>
@@ -450,7 +450,7 @@ public function updateCompany($id, CompanyFormRequest $request)
                             <a href="' . route('public.company', ['id' => $companies->id]) . '"><i class="fa fa-pencil" aria-hidden="true"></i>View Company Details</a>
                         </li> 
 <li><a href="javascript:void(0);" onClick="' . $activeHref . '" id="onclickActive' . $companies->id . '"><i class="fa fa-' . $activeIcon . '" aria-hidden="true"></i>' . $activeTxt . '</a></li>
-<li><a href="javascript:void(0);" onClick="' . $featuredHref . '" id="onclickFeatured' . $companies->id . '"><i class="fa fa-' . $featuredIcon . '" aria-hidden="true"></i>' . $featuredTxt . '</a></li>
+
 					</ul>
 				</div>';
                         })

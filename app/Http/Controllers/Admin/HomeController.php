@@ -30,6 +30,8 @@ class HomeController extends Controller
     public function index()
     {
 
+
+     
        
         $today = Carbon::now();
         $totalActiveCompanies = Company::where('is_active', 1)->count();
@@ -39,7 +41,7 @@ class HomeController extends Controller
         $totalTodaysUsers = User::where('created_at', 'like', $today->toDateString() . '%')->count();
         $totalTodaysCompanies = Company::where('created_at', 'like', $today->toDateString() . '%')->count();
         
-
+ 
 
         $documents = [
             'incorporation_or_formation_certificate',
@@ -56,7 +58,7 @@ class HomeController extends Controller
             }
         })
         ->get();
-
+ 
        
         $activeCompanies = Company::where('is_active', 1)->get();
        // $inActiveCompanies = Company::where('is_active', 0)->get();
@@ -66,7 +68,7 @@ class HomeController extends Controller
         $totalFeaturedJobs = Job::where('is_featured', 1)->count();
         $totalTodaysJobs = Job::where('created_at', 'like', $today->toDateString() . '%')->count();
         $recentJobs = Job::orderBy('id', 'DESC')->take(25)->get();
-        
+       
         return view('admin.home')
                         ->with('totalActiveUsers', $totalActiveUsers)
                         ->with('totalVerifiedUsers', $totalVerifiedUsers)
