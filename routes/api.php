@@ -354,3 +354,33 @@ Route::get('/migrate-old-images', function () {
         ], 500);
     }
 });
+
+Route::get('/debug-images', function () {
+    $dir = public_path('post_images');
+    $files = is_dir($dir) ? array_diff(scandir($dir), array('.', '..')) : [];
+    
+    $posts = \Illuminate\Support\Facades\DB::table('posts')->whereNotNull('images')->limit(5)->get();
+    $dbPathsChecked = [];
+    
+    foreach ($posts as $post) {
+        $images = json_decode($post->images, true);
+        if (is_string($images)) $images = json_decode($images, true);
+        if (is_array($images)) {
+            foreach ($images as $img) {
+                $localPath = public_path('post_images/' . $img);
+                $dbPathsChecked[] = [
+                    'image_name' => $img,
+                    'path_checked' => $localPath,
+                    'exists' => file_exists($localPath)
+                ];
+            }
+        }
+    }
+
+    return response()->json([
+        'public_path_post_images' => $dir,
+        'is_directory' => is_dir($dir),
+        'files_in_directory_sample' => array_slice(array_values($files), 0, 10),
+        'db_paths_checked' => $dbPathsChecked
+    ]);
+});
