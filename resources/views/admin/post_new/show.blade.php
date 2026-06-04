@@ -248,10 +248,10 @@
                                             @foreach($images as $image)
                                                 <div class="col-md-3">
                                                     <div class="thumbnail">
-                                                        <img src="{{ asset('post_images/' . $image) }}" 
+                                                        <img src="{{ env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image) }}" 
                                                              alt="Post Image" style="max-height: 150px; width: 100%; object-fit: cover;">
                                                         <div class="caption text-center">
-                                                            <a href="{{ asset('post_images/' . $image) }}" 
+                                                            <a href="{{ env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image) }}" 
                                                                target="_blank" class="btn btn-xs btn-primary">View Full</a>
                                                         </div>
                                                     </div>
@@ -263,7 +263,7 @@
                                     @if(!empty($files))
                                         <div class="list-group">
                                             @foreach($files as $file)
-                                                <a href="{{ asset('post_files/' . $file) }}" 
+                                                <a href="{{ env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file) }}" 
                                                    class="list-group-item" target="_blank">
                                                     <i class="fa fa-file"></i> {{ $file }}
                                                     <span class="badge">

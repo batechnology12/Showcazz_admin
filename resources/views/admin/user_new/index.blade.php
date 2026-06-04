@@ -142,7 +142,7 @@
                                         <td>{{ $user->id }}</td>
                                         <td>
                                             @if($user->image)
-                                                <img src="{{ asset('user_images/'.$user->image) }}" alt="{{ $user->getName() }}" style="max-width: 50px; max-height: 50px; border-radius: 50%;">
+                                                <img src="{{ filter_var($user->image, FILTER_VALIDATE_URL) ? $user->image : (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/'.$user->image)) }}" alt="{{ $user->getName() }}" style="max-width: 50px; max-height: 50px; border-radius: 50%;">
                                             @else
                                                 <span class="label label-default">No Photo</span>
                                             @endif

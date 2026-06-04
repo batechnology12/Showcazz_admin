@@ -203,9 +203,9 @@
                                         @foreach($images as $image)
                                             <div class="col-md-3">
                                                 <div class="thumbnail">
-                                                    <img src="{{ asset('post_images/' . $image) }}" alt="Job Image" style="max-height: 150px; width: 100%; object-fit: cover;">
+                                                    <img src="{{ env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image) }}" alt="Job Image" style="max-height: 150px; width: 100%; object-fit: cover;">
                                                     <div class="caption text-center">
-                                                        <a href="{{ asset('post_images/' . $image) }}" target="_blank" class="btn btn-xs btn-primary">View Full</a>
+                                                        <a href="{{ env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image) }}" target="_blank" class="btn btn-xs btn-primary">View Full</a>
                                                     </div>
                                                 </div>
                                             </div>

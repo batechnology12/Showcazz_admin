@@ -69,7 +69,7 @@
                         <div class="row">
                             <div class="col-md-2 text-center">
                                 @if($user->image)
-                                    <img src="{{ asset('user_images/'.$user->image) }}" alt="{{ $user->getName() }}" class="img-responsive img-circle" style="max-width: 150px; max-height: 150px;">
+                                    <img src="{{ filter_var($user->image, FILTER_VALIDATE_URL) ? $user->image : (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/'.$user->image)) }}" alt="{{ $user->getName() }}" class="img-responsive img-circle" style="max-width: 150px; max-height: 150px;">
                                 @else
                                     <div class="well well-sm" style="min-height: 150px; line-height: 150px;">
                                         <i class="fa fa-user fa-3x"></i>
