@@ -283,37 +283,74 @@ Route::middleware('auth:sanctum')->group(function () {
    
 });
 
-Route::post('/test-do-upload', function (\Illuminate\Http\Request $request) {
+Route::get('/migrate-old-images', function () {
     try {
-        if (!$request->hasFile('image')) {
-            return response()->json(['success' => false, 'message' => 'No image provided in request'], 400);
+        $posts = \Illuminate\Support\Facades\DB::table('posts')
+            ->whereNotNull('images')
+            ->orWhereNotNull('files')
+            ->get();
+            
+        $migratedImages = 0;
+        $migratedFiles = 0;
+        $missingImages = 0;
+        $missingFiles = 0;
+        $results = [];
+
+        foreach ($posts as $post) {
+            // Process Images
+            if (!empty($post->images)) {
+                $images = json_decode($post->images, true);
+                if (is_string($images)) $images = json_decode($images, true);
+                if (is_array($images)) {
+                    foreach ($images as $img) {
+                        $localPath = public_path('post_images/' . $img);
+                        if (file_exists($localPath)) {
+                            \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_images', new \Illuminate\Http\File($localPath), $img, 'public');
+                            $migratedImages++;
+                            $results[] = "Migrated Image: " . $img;
+                        } else {
+                            $missingImages++;
+                        }
+                    }
+                }
+            }
+
+            // Process Files
+            if (!empty($post->files)) {
+                $files = json_decode($post->files, true);
+                if (is_string($files)) $files = json_decode($files, true);
+                if (is_array($files)) {
+                    foreach ($files as $file) {
+                        $localPath = public_path('post_files/' . $file);
+                        if (file_exists($localPath)) {
+                            \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_files', new \Illuminate\Http\File($localPath), $file, 'public');
+                            $migratedFiles++;
+                            $results[] = "Migrated File: " . $file;
+                        } else {
+                            $missingFiles++;
+                        }
+                    }
+                }
+            }
         }
-
-        $file = $request->file('image');
-        $extension = $file->getClientOriginalExtension();
-        $fileName = 'direct_test_' . time() . '.' . $extension;
-
-        // Upload directly to DO Spaces without storing locally
-        \Illuminate\Support\Facades\Storage::disk('do')->putFileAs(
-            'user_images', 
-            $file, 
-            $fileName, 
-            'public'
-        );
-
-        $url = \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $fileName);
 
         return response()->json([
             'success' => true,
-            'message' => 'Image uploaded directly to DO Spaces successfully',
-            'fileName' => $fileName,
-            'url' => $url,
-            'disk' => 'do'
+            'message' => 'Migration completed successfully!',
+            'stats' => [
+                'total_posts_checked' => count($posts),
+                'migrated_images' => $migratedImages,
+                'migrated_files' => $migratedFiles,
+                'missing_local_images' => $missingImages,
+                'missing_local_files' => $missingFiles,
+            ],
+            'details' => $results
         ]);
+
     } catch (\Exception $e) {
         return response()->json([
             'success' => false,
-            'message' => 'Upload failed: ' . $e->getMessage()
+            'message' => 'Migration failed: ' . $e->getMessage()
         ], 500);
     }
 });
