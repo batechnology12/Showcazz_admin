@@ -226,7 +226,7 @@
                                 <tr>
                                     <td>
                                         @if($user->image)
-                                            <img src="{{ asset('user_images/' . $user->image) }}" class="img-circle" style="width: 30px; height: 30px; margin-right: 5px;">
+                                            <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) }}" class="img-circle" style="width: 30px; height: 30px; margin-right: 5px;">
                                         @endif
                                         {{ $user->getName() }}
                                     </td>

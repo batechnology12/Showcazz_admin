@@ -56,8 +56,8 @@ class JobOpportunityController extends Controller
                 'email'       => $user->email,
                 'usertype'    => 'company',
                 'image'       => $user->company_logo
-                                    ? asset('company_logos/' . $user->company_logo)
-                                    : ($user->image ? asset('user_images/' . $user->image) : null),
+                                    ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo))
+                                    : ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                 'slug'        => $user->company_slug,
                 'description' => $user->company_description,
                 'location'    => $user->company_location ?? $user->location,
@@ -76,7 +76,7 @@ class JobOpportunityController extends Controller
             'name'              => $name,
             'email'             => $user->email,
             'usertype'          => $user->usertype ?? 'user',
-            'image'             => $user->image ? asset('user_images/' . $user->image) : null,
+            'image'             => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
             'headline'          => $user->headline,
             'location'          => $user->location,
             'portfolio_website' => $user->portfolio_website,

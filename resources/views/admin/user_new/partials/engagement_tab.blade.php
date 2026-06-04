@@ -29,7 +29,7 @@
                             <td>
                                 @if($like->user)
                                     @if($like->user->image)
-                                        <img src="{{ asset('user_images/' . $like->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $like->user->image) : asset('user_images/' . $like->user->image)) }}" 
                                              style="max-width: 30px; max-height: 30px; border-radius: 50%;">
                                     @endif
                                     {{ $like->user->getName() }}
@@ -90,7 +90,7 @@
                             <td>
                                 @if($comment->user)
                                     @if($comment->user->image)
-                                        <img src="{{ asset('user_images/' . $comment->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $comment->user->image) : asset('user_images/' . $comment->user->image)) }}" 
                                              style="max-width: 30px; max-height: 30px; border-radius: 50%;">
                                     @endif
                                     {{ $comment->user->getName() }}
@@ -152,7 +152,7 @@
                             <td>
                                 @if($share->user)
                                     @if($share->user->image)
-                                        <img src="{{ asset('user_images/' . $share->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $share->user->image) : asset('user_images/' . $share->user->image)) }}" 
                                              style="max-width: 30px; max-height: 30px; border-radius: 50%;">
                                     @endif
                                     {{ $share->user->getName() }}
@@ -218,7 +218,7 @@
                             <td>
                                 @if($view->user)
                                     @if($view->user->image)
-                                        <img src="{{ asset('user_images/' . $view->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $view->user->image) : asset('user_images/' . $view->user->image)) }}" 
                                              style="max-width: 30px; max-height: 30px; border-radius: 50%;">
                                     @endif
                                     {{ $view->user->getName() }}

@@ -119,8 +119,8 @@ class ChatController extends Controller
                     'usertype' => 'company',
                     'email' => $user->email ?? null,
                     'phone' => $user->phone ?? null,
-                    'image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                               ($user->image ? asset('user_images/' . $user->image) : null),
+                    'image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                               ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                     'entity_type' => 'company',
                     'visibility_control' => $user->visibility_control ?? 'public',
                     'post_visibility_control' => $user->post_visibility_control ?? 'public',
@@ -143,7 +143,7 @@ class ChatController extends Controller
                 'usertype' => $user->usertype ?? 'user',
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
                 'entity_type' => 'user',
                 'visibility_control' => $user->visibility_control ?? 'public',
                 'post_visibility_control' => $user->post_visibility_control ?? 'public',
@@ -2303,11 +2303,11 @@ public function getMessages_new(Request $request, $chatSessionId = null)
                     
                     if ($userResult->usertype === 'company') {
                         $name = $userResult->company_name ?? $userResult->name;
-                        $image = $userResult->company_logo ? asset('company_logos/' . $userResult->company_logo) : 
-                                 ($userResult->image ? asset('user_images/' . $userResult->image) : null);
+                        $image = $userResult->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $userResult->company_logo) : asset('company_logos/' . $userResult->company_logo)) : 
+                                 ($userResult->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $userResult->image) : asset('user_images/' . $userResult->image)) : null);
                     } else {
                         $name = trim(($userResult->first_name ?? '') . ' ' . ($userResult->last_name ?? '')) ?: $userResult->name;
-                        $image = $userResult->image ? asset('user_images/' . $userResult->image) : null;
+                        $image = $userResult->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $userResult->image) : asset('user_images/' . $userResult->image)) : null;
                     }
                     
                     return [
@@ -2758,8 +2758,8 @@ public function getMessages_new(Request $request, $chatSessionId = null)
             
             if ($isCompany) {
                 $name = $otherUser->company_name ?? $otherUser->name ?? 'Unknown Company';
-                $image = $otherUser->company_logo ? asset('company_logos/' . $otherUser->company_logo) : 
-                         ($otherUser->image ? asset('user_images/' . $otherUser->image) : null);
+                $image = $otherUser->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $otherUser->company_logo) : asset('company_logos/' . $otherUser->company_logo)) : 
+                         ($otherUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $otherUser->image) : asset('user_images/' . $otherUser->image)) : null);
                 $usertype = 'company';
                 $entityType = 'company';
             } else {
@@ -2767,7 +2767,7 @@ public function getMessages_new(Request $request, $chatSessionId = null)
                 $lastName = $otherUser->last_name ?? '';
                 $name = trim($firstName . ' ' . $lastName);
                 $name = $name ?: ($otherUser->name ?? 'Unknown User');
-                $image = $otherUser->image ? asset('user_images/' . $otherUser->image) : null;
+                $image = $otherUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $otherUser->image) : asset('user_images/' . $otherUser->image)) : null;
                 $usertype = $otherUser->usertype ?? 'user';
                 $entityType = 'user';
             }

@@ -69,9 +69,9 @@
                         <div class="row">
                             <div class="col-md-2 text-center">
                                 @if($company->company_logo)
-                                    <img src="{{ asset('company_logos/'.$company->company_logo) }}" alt="{{ $company->company_name ?? $company->name }}" class="img-responsive" style="max-width: 150px;">
+                                    <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $company->company_logo) : asset('company_logos/' . $company->company_logo)) }}" alt="{{ $company->company_name ?? $company->name }}" class="img-responsive" style="max-width: 150px;">
                                 @elseif($company->image)
-                                    <img src="{{ asset('user_images/'.$company->image) }}" alt="{{ $company->company_name ?? $company->name }}" class="img-responsive" style="max-width: 150px;">
+                                    <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $company->image) : asset('user_images/' . $company->image)) }}" alt="{{ $company->company_name ?? $company->name }}" class="img-responsive" style="max-width: 150px;">
                                 @else
                                     <div class="well well-sm" style="min-height: 150px; line-height: 150px;">No Logo</div>
                                 @endif

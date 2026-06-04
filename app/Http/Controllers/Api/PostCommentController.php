@@ -590,8 +590,8 @@ class PostCommentController extends Controller
                 'name'     => $user->company_name ?? $user->name ?? 'Unknown Company',
                 'usertype' => 'company',
                 'image'    => $user->company_logo
-                                ? asset('company_logos/' . $user->company_logo)
-                                : ($user->image ? asset('user_images/' . $user->image) : null),
+                                ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo))
+                                : ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
             ], $likedAt);
         }
 
@@ -602,7 +602,7 @@ class PostCommentController extends Controller
             'user_id'  => (int) $user->id,
             'name'     => $name,
             'usertype' => $user->usertype ?? 'user',
-            'image'    => $user->image ? asset('user_images/' . $user->image) : null,
+            'image'    => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
         ], $likedAt);
     }
 
@@ -625,8 +625,8 @@ class PostCommentController extends Controller
                 'name'     => $user->company_name ?? $user->name ?? 'Unknown Company',
                 'usertype' => 'company',
                 'image'    => $user->company_logo
-                                ? asset('company_logos/' . $user->company_logo)
-                                : ($user->image ? asset('user_images/' . $user->image) : null),
+                                ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo))
+                                : ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                 'email'    => $user->email,
             ];
         }
@@ -638,7 +638,7 @@ class PostCommentController extends Controller
             'id'       => (int) $user->id,
             'name'     => $name,
             'usertype' => $user->usertype ?? 'user',
-            'image'    => $user->image ? asset('user_images/' . $user->image) : null,
+            'image'    => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
             'email'    => $user->email,
         ];
     }

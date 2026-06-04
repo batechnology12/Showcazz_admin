@@ -369,7 +369,7 @@
                                                 <div class="media">
                                                     <div class="media-left">
                                                         @if($like->user && $like->user->image)
-                                                            <img src="{{ asset('user_images/' . $like->user->image) }}" class="img-circle" style="width: 30px; height: 30px;">
+                                                            <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $like->user->image) : asset('user_images/' . $like->user->image)) }}" class="img-circle" style="width: 30px; height: 30px;">
                                                         @else
                                                             <div class="img-circle text-center" style="width: 30px; height: 30px; background: #ccc; line-height: 30px;">
                                                                 <i class="fa fa-user"></i>
@@ -410,7 +410,7 @@
                             <div class="media" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9;">
                                 <div class="media-left">
                                     @if($comment->user && $comment->user->image)
-                                        <img src="{{ asset('user_images/' . $comment->user->image) }}" class="img-circle" style="width: 40px; height: 40px;">
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $comment->user->image) : asset('user_images/' . $comment->user->image)) }}" class="img-circle" style="width: 40px; height: 40px;">
                                     @else
                                         <div class="img-circle text-center" style="width: 40px; height: 40px; background: #ccc; line-height: 40px;">
                                             <i class="fa fa-user"></i>
@@ -434,7 +434,7 @@
                                                 <div class="media" style="padding: 5px; background: #fff;">
                                                     <div class="media-left">
                                                         @if($reply->user && $reply->user->image)
-                                                            <img src="{{ asset('user_images/' . $reply->user->image) }}" class="img-circle" style="width: 30px; height: 30px;">
+                                                            <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $reply->user->image) : asset('user_images/' . $reply->user->image)) }}" class="img-circle" style="width: 30px; height: 30px;">
                                                         @else
                                                             <div class="img-circle text-center" style="width: 30px; height: 30px; background: #ccc; line-height: 30px;">
                                                                 <i class="fa fa-user"></i>

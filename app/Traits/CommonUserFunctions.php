@@ -27,9 +27,9 @@ trait CommonUserFunctions
             $user = User::findOrFail($id);
             $image = $user->image;
             if (!empty($image)) {
-                File::delete(ImgUploader::real_public_path() . 'user_images/thumb/' . $image);
-                File::delete(ImgUploader::real_public_path() . 'user_images/mid/' . $image);
-                File::delete(ImgUploader::real_public_path() . 'user_images/' . $image);
+                File::delete(ImgUploader::real_public_path() . 'user_images/thumb/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/thumb/' . $image); }
+                File::delete(ImgUploader::real_public_path() . 'user_images/mid/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/mid/' . $image); }
+                File::delete(ImgUploader::real_public_path() . 'user_images/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/' . $image); }
             }
             return 'ok';
         } catch (ModelNotFoundException $e) {
@@ -43,9 +43,9 @@ trait CommonUserFunctions
             $user = User::findOrFail($id);
             $cover_image = $user->image;
             if (!empty($cover_image)) {
-                File::delete(ImgUploader::real_public_path() . 'user_images/thumb/' . $cover_image);
-                File::delete(ImgUploader::real_public_path() . 'user_images/mid/' . $cover_image);
-                File::delete(ImgUploader::real_public_path() . 'user_images/' . $cover_image);
+                File::delete(ImgUploader::real_public_path() . 'user_images/thumb/' . $cover_image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/thumb/' . $cover_image); }
+                File::delete(ImgUploader::real_public_path() . 'user_images/mid/' . $cover_image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/mid/' . $cover_image); }
+                File::delete(ImgUploader::real_public_path() . 'user_images/' . $cover_image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('user_images/' . $cover_image); }
             }
             return 'ok';
         } catch (ModelNotFoundException $e) {

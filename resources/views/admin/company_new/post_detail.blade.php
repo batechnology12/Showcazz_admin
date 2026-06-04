@@ -488,7 +488,7 @@
                             <div class="media" id="commentRow{{ $comment->id }}" style="margin-bottom: 15px;">
                                 <div class="media-left">
                                     @if($comment->user && $comment->user->image)
-                                        <img src="{{ asset('user_images/' . $comment->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $comment->user->image) : asset('user_images/' . $comment->user->image)) }}" 
                                              class="media-object img-circle" style="width: 50px; height: 50px;">
                                     @else
                                         <div class="media-object img-circle text-center" 
@@ -523,7 +523,7 @@
                                                 <div class="media" id="commentRow{{ $reply->id }}" style="margin-bottom: 10px;">
                                                     <div class="media-left">
                                                         @if($reply->user && $reply->user->image)
-                                                            <img src="{{ asset('user_images/' . $reply->user->image) }}" 
+                                                            <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $reply->user->image) : asset('user_images/' . $reply->user->image)) }}" 
                                                                  class="media-object img-circle" style="width: 40px; height: 40px;">
                                                         @else
                                                             <div class="media-object img-circle text-center" 
@@ -584,7 +584,7 @@
                             @foreach($post->likes->take(20) as $like)
                                 <div class="col-md-2 col-sm-3 col-xs-6 text-center" style="margin-bottom: 15px;">
                                     @if($like->user && $like->user->image)
-                                        <img src="{{ asset('user_images/' . $like->user->image) }}" 
+                                        <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $like->user->image) : asset('user_images/' . $like->user->image)) }}" 
                                              class="img-circle" style="width: 50px; height: 50px;">
                                     @else
                                         <div class="img-circle text-center" 

@@ -50,7 +50,36 @@ class ImageUploadingHelper
             })->save($thumbImagePath . '/' . $fileName);
             /*             * **** End Resizing Images ******** */
         }
+        
+        // Exclude temporary project images from syncing directly (they will be synced when moved)
+        if (strpos($destinationPath, 'temp_project_images') === false) {
+            self::syncToStorage($destinationPath, $fileName, $makeOtherSizesImages);
+        }
+
         return $fileName;
+    }
+
+    public static function syncToStorage($folder, $fileName, $hasOtherSizes = false)
+    {
+        // Strip trailing/leading slashes from folder for DO storage path
+        $folderName = trim(str_replace(self::real_public_path(), '', $folder), '/');
+        
+        if (env('DO_ACCESS_KEY_ID')) {
+            $localPath = self::real_public_path() . $folderName . '/' . $fileName;
+            if (file_exists($localPath)) {
+                \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName, new \Illuminate\Http\File($localPath), $fileName, 'public');
+            }
+            if ($hasOtherSizes) {
+                $mid = self::real_public_path() . $folderName . self::$midFolder . '/' . $fileName;
+                if (file_exists($mid)) {
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName . self::$midFolder, new \Illuminate\Http\File($mid), $fileName, 'public');
+                }
+                $thumb = self::real_public_path() . $folderName . self::$thumbFolder . '/' . $fileName;
+                if (file_exists($thumb)) {
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName . self::$thumbFolder, new \Illuminate\Http\File($thumb), $fileName, 'public');
+                }
+            }
+        }
     }
 
     public static function UploadDoc($destinationPath, $field, $newName = '')
@@ -86,6 +115,10 @@ class ImageUploadingHelper
             rename($tempMidImagePath . '/' . $fileName, $newMidImagePath . '/' . $newFileName);
             rename($tempThumbImagePath . '/' . $fileName, $newThumbImagePath . '/' . $newFileName);
             $ret = $newFileName;
+            
+            // Sync the moved image to DigitalOcean Spaces if configured
+            $folderName = trim(str_replace(self::real_public_path(), '', $newPath), '/');
+            self::syncToStorage($folderName, $newFileName, true);
         }
         return $ret;
     }
@@ -101,6 +134,10 @@ class ImageUploadingHelper
             $newFileName = $newFileName . '.' . $ext;
             rename($tempPath . '/' . $fileName, $newPath . '/' . $newFileName);
             $ret = $newFileName;
+            
+            // Sync the moved doc to DigitalOcean Spaces if configured
+            $folderName = trim(str_replace(self::real_public_path(), '', $newPath), '/');
+            self::syncToStorage($folderName, $newFileName, false);
         }
         return $ret;
     }
@@ -118,6 +155,9 @@ class ImageUploadingHelper
             $constraint->upsize();
         })->save($destinationPath . '/' . $fileName);
         /*         * **** End Resizing Images ******** */
+        
+        self::syncToStorage($destinationPath, $fileName, false);
+        
         return $fileName;
     }
 

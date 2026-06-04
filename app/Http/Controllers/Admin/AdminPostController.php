@@ -83,8 +83,8 @@ class AdminPostController extends Controller
                 'unique_id' => $user->unique_id,
                 'name' => $user->company_name ?? $user->name,
                 'type' => 'company',
-                'image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                           ($user->image ? asset('user_images/' . $user->image) : null),
+                'image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                           ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                 'email' => $user->email,
                 'phone' => $user->phone,
             ];
@@ -95,7 +95,7 @@ class AdminPostController extends Controller
             'unique_id' => $user->unique_id,
             'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? 'Unknown User'),
             'type' => $user->usertype ?? 'user',
-            'image' => $user->image ? asset('user_images/' . $user->image) : null,
+            'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
             'email' => $user->email,
             'phone' => $user->phone,
         ];

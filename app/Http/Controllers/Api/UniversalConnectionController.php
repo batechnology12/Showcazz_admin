@@ -111,8 +111,8 @@ class UniversalConnectionController extends Controller
                 'usertype'                   => 'company',
                 'headline'                   => $entity->company_description ?? $entity->headline,
                 'image'                      => $entity->company_logo
-                                                    ? asset('company_logos/' . $entity->company_logo)
-                                                    : ($entity->image ? asset('user_images/' . $entity->image) : null),
+                                                    ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $entity->company_logo) : asset('company_logos/' . $entity->company_logo))
+                                                    : ($entity->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $entity->image) : asset('user_images/' . $entity->image)) : null),
                 'slug'                       => $entity->company_slug ?? null,
                 'visibility_control'         => $entity->visibility_control ?? 'public',
                 'post_visibility_control'    => $entity->post_visibility_control ?? 'public',
@@ -131,7 +131,7 @@ class UniversalConnectionController extends Controller
             'email'                      => $entity->email ?? null,
             'usertype'                   => $entity->usertype ?? 'user',
             'headline'                   => $entity->headline ?? null,
-            'image'                      => $entity->image ? asset('user_images/' . $entity->image) : null,
+            'image'                      => $entity->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $entity->image) : asset('user_images/' . $entity->image)) : null,
             'slug'                       => null,
             'visibility_control'         => $entity->visibility_control ?? 'public',
             'post_visibility_control'    => $entity->post_visibility_control ?? 'public',

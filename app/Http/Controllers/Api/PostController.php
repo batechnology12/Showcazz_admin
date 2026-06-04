@@ -766,7 +766,7 @@ class PostController extends Controller
             return [
                 'id' => $user->id,
                 'name' => $user->getName(),
-                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
                 'usertype' => $user->usertype ?? 'professional',
             ];
         });
@@ -2667,8 +2667,8 @@ class PostController extends Controller
     //                 'usertype' => 'company',
     //                 'email' => $user->email ?? null,
     //                 'phone' => $user->phone ?? null,
-    //                 'image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-    //                           ($user->image ? asset('user_images/' . $user->image) : null),
+    //                 'image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+    //                           ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
     //             ];
     //         }
             
@@ -2683,7 +2683,7 @@ class PostController extends Controller
     //             'usertype' => $user->usertype ?? 'user',
     //             'email' => $user->email,
     //             'phone' => $user->phone,
-    //             'image' => $user->image ? asset('user_images/' . $user->image) : null,
+    //             'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
     //         ];
     //     }
     
@@ -3766,8 +3766,8 @@ class PostController extends Controller
                             'id' => $originalAuthor->id,
                             'name' => $originalAuthor->company_name ?? $originalAuthor->name ?? 'Unknown Company',
                             'usertype' => 'company',
-                            'image' => $originalAuthor->company_logo ? asset('company_logos/' . $originalAuthor->company_logo) : 
-                                       ($originalAuthor->image ? asset('user_images/' . $originalAuthor->image) : null),
+                            'image' => $originalAuthor->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $originalAuthor->company_logo) : asset('company_logos/' . $originalAuthor->company_logo)) : 
+                                       ($originalAuthor->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $originalAuthor->image) : asset('user_images/' . $originalAuthor->image)) : null),
                             'headline' => $originalAuthor->company_description ?? $originalAuthor->headline,
                         ];
                     } else {
@@ -3775,7 +3775,7 @@ class PostController extends Controller
                             'id' => $originalAuthor->id,
                             'name' => $originalAuthor->getName(),
                             'usertype' => $originalAuthor->usertype ?? 'user',
-                            'image' => $originalAuthor->image ? asset('user_images/' . $originalAuthor->image) : null,
+                            'image' => $originalAuthor->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $originalAuthor->image) : asset('user_images/' . $originalAuthor->image)) : null,
                             'headline' => $originalAuthor->headline,
                         ];
                     }
@@ -3830,12 +3830,12 @@ class PostController extends Controller
                 
                 if ($taggedUser->usertype === 'company') {
                     $userName = $taggedUser->company_name ?? $taggedUser->name ?? 'Unknown Company';
-                    $userImage = $taggedUser->company_logo ? asset('company_logos/' . $taggedUser->company_logo) : 
-                                ($taggedUser->image ? asset('user_images/' . $taggedUser->image) : null);
+                    $userImage = $taggedUser->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $taggedUser->company_logo) : asset('company_logos/' . $taggedUser->company_logo)) : 
+                                ($taggedUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $taggedUser->image) : asset('user_images/' . $taggedUser->image)) : null);
                     $userHeadline = $taggedUser->company_description ?? $taggedUser->headline;
                 } else {
                     $userName = $taggedUser->getName();
-                    $userImage = $taggedUser->image ? asset('user_images/' . $taggedUser->image) : null;
+                    $userImage = $taggedUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $taggedUser->image) : asset('user_images/' . $taggedUser->image)) : null;
                     $userHeadline = $taggedUser->headline;
                 }
                 
@@ -4017,12 +4017,12 @@ class PostController extends Controller
             
             if ($userRecord->usertype === 'company') {
                 $authorName = $userRecord->company_name ?? $userRecord->name;
-                $authorImage = $userRecord->company_logo ? asset('company_logos/' . $userRecord->company_logo) : 
-                               ($userRecord->image ? asset('user_images/' . $userRecord->image) : null);
+                $authorImage = $userRecord->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $userRecord->company_logo) : asset('company_logos/' . $userRecord->company_logo)) : 
+                               ($userRecord->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $userRecord->image) : asset('user_images/' . $userRecord->image)) : null);
                 $authorHeadline = $userRecord->company_description ?? $userRecord->headline;
             } else {
                 $authorName = $userRecord->getName();
-                $authorImage = $userRecord->image ? asset('user_images/' . $userRecord->image) : null;
+                $authorImage = $userRecord->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $userRecord->image) : asset('user_images/' . $userRecord->image)) : null;
                 $authorHeadline = $userRecord->headline;
             }
         }
@@ -4059,8 +4059,8 @@ class PostController extends Controller
                     'user_id' => $user->id,
                     'name' => $user->company_name ?? $user->name,
                     'usertype' => 'company',
-                    'image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                               ($user->image ? asset('user_images/' . $user->image) : null),
+                    'image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                               ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                     'liked_at' => $like->created_at,
                     'is_connected' => $isConnected,
                 ];
@@ -4070,7 +4070,7 @@ class PostController extends Controller
                 'user_id' => $user->id,
                 'name' => $user->getName(),
                 'usertype' => $user->usertype,
-                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
                 'liked_at' => $like->created_at,
                 'is_connected' => $isConnected,
             ];
@@ -4165,8 +4165,8 @@ class PostController extends Controller
                     'email' => $user->email ?? $user->email,
                     'phone' => $user->phone,
                     'usertype' => 'company',
-                    'image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                               ($user->image ? asset('user_images/' . $user->image) : null),
+                    'image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                               ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                     'headline' => $user->company_description ?? $user->headline,
                 ];
             }
@@ -4177,7 +4177,7 @@ class PostController extends Controller
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'usertype' => $user->usertype ?? 'user',
-                'image' => $user->image ? asset('user_images/' . $user->image) : null,
+                'image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
                 'headline' => $user->headline,
             ];
         }

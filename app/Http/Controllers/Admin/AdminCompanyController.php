@@ -78,7 +78,7 @@ class AdminCompanyController extends Controller
             'website' => $company->company_website,
             'description' => $company->company_description,
             'location' => $company->company_location,
-            'logo' => $company->company_logo ? asset('company_logos/' . $company->company_logo) : null,
+            'logo' => $company->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $company->company_logo) : asset('company_logos/' . $company->company_logo)) : null,
             'slug' => $company->company_slug,
             'is_active' => $company->is_active,
             'is_featured' => $company->is_featured,

@@ -17,9 +17,9 @@ trait CompanyTrait
             $company = Company::findOrFail($id);
             $image = $company->logo;
             if (!empty($image)) {
-                File::delete(ImgUploader::real_public_path() . 'company_logos/thumb/' . $image);
-                File::delete(ImgUploader::real_public_path() . 'company_logos/mid/' . $image);
-                File::delete(ImgUploader::real_public_path() . 'company_logos/' . $image);
+                File::delete(ImgUploader::real_public_path() . 'company_logos/thumb/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('company_logos/thumb/' . $image); }
+                File::delete(ImgUploader::real_public_path() . 'company_logos/mid/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('company_logos/mid/' . $image); }
+                File::delete(ImgUploader::real_public_path() . 'company_logos/' . $image); if (env('DO_ACCESS_KEY_ID')) { \Illuminate\Support\Facades\Storage::disk('do')->delete('company_logos/' . $image); }
             }
             return 'ok';
         } catch (ModelNotFoundException $e) {

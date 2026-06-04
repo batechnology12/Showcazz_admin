@@ -745,7 +745,7 @@ class RegisterController extends Controller
                         'location' => $user->company_location,
                         'phone' => $user->phone,
                         'industry_id' => $user->company_industry_id,
-                        'logo' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : null,
+                        'logo' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null,
                         'profile_completed' => true,
                     ]
                 ]
@@ -919,8 +919,8 @@ class RegisterController extends Controller
                 'industry_id' => $user->company_industry_id ?? '',
             ],
             'images' => [
-                'logo' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                         ($user->image ? asset('user_images/' . $user->image) : null),
+                'logo' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                         ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
             ],
             'dropdowns' => [
                 'industries' => $industries,
@@ -1004,8 +1004,8 @@ class RegisterController extends Controller
                 'currently_pursuing' => !empty($user->course_duration) && strpos($user->course_duration, 'Present') !== false,
             ] : [],
             'images' => [
-                'profile_image' => $user->image ? asset('user_images/' . $user->image) : null,
-                'cover_image' => $user->cover_image ? asset('user_images/' . $user->cover_image) : null,
+                'profile_image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
+                'cover_image' => $user->cover_image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->cover_image) : asset('user_images/' . $user->cover_image)) : null,
             ],
             'dropdowns' => [
                 'area_of_interests' => $areaOfInterestIds,
@@ -1176,7 +1176,7 @@ class RegisterController extends Controller
                     'name' => $user->company_name,
                     'email' => $user->email,
                     'usertype' => 'company',
-                    'logo' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : null,
+                    'logo' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null,
                     'slug' => $user->company_slug,
                     'visibility_control' => $user->visibility_control,
                     'post_visibility_control' => $user->post_visibility_control,
@@ -1373,8 +1373,8 @@ class RegisterController extends Controller
                     'name' => $user->getName(),
                     'email' => $user->email,
                     'usertype' => $user->usertype,
-                    'profile_image' => $user->image ? asset('user_images/' . $user->image) : null,
-                    'cover_image' => $user->cover_image ? asset('user_images/' . $user->cover_image) : null,
+                    'profile_image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
+                    'cover_image' => $user->cover_image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->cover_image) : asset('user_images/' . $user->cover_image)) : null,
                     'visibility_control' => $user->visibility_control,
                     'post_visibility_control' => $user->post_visibility_control,
                     'message_visibility_control' => $user->message_visibility_control,
@@ -1411,6 +1411,9 @@ class RegisterController extends Controller
                 // Save file
                 file_put_contents($filePath, $imageData);
                 
+                // Sync to DO Spaces if configured
+                \App\Helpers\ImageUploadingHelper::syncToStorage($folder, $fileName, false);
+                
                 $model->$field = $fileName;
             } elseif (strpos($imageData, 'http') === 0) {
                 // URL - extract filename
@@ -1430,13 +1433,17 @@ class RegisterController extends Controller
     /**
      * Delete image file
      */
-    private function deleteImage($fileName, $folder)
+    private function deleteImage($filename, $folder)
     {
-        if (!$fileName) return;
-
-        $filePath = public_path($folder . '/' . $fileName);
-        if (file_exists($filePath)) {
-            @unlink($filePath);
+        if ($filename) {
+            if (file_exists(public_path($folder . '/' . $filename))) {
+                unlink(public_path($folder . '/' . $filename));
+            }
+            if (env('DO_ACCESS_KEY_ID')) {
+                \Illuminate\Support\Facades\Storage::disk('do')->delete($folder . '/' . $filename);
+                \Illuminate\Support\Facades\Storage::disk('do')->delete($folder . '/mid/' . $filename);
+                \Illuminate\Support\Facades\Storage::disk('do')->delete($folder . '/thumb/' . $filename);
+            }
         }
     }
 
@@ -1530,8 +1537,8 @@ class RegisterController extends Controller
                 'slug' => $user->company_slug,
                 'email_verified_at' => $user->email_verified_at,
                 'profile_image' => $user->usertype === 'company'
-                    ? ($user->company_logo ? asset('company_logos/' . $user->company_logo) : null)
-                    : ($user->image ? asset('user_images/' . $user->image) : null),
+                    ? ($user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null)
+                    : ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
                 'headline' => $user->headline ?? null,
                 'location' => $user->usertype === 'company'
                     ? ($user->company_location ?? $user->location)
@@ -1654,7 +1661,7 @@ class RegisterController extends Controller
                     'usertype' => 'company',
                     'slug' => $user->company_slug,
                     'email_verified_at' => $user->email_verified_at,
-                    'profile_image' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : null,
+                    'profile_image' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null,
                     'industry' => $user->getIndustry('industry') ?? null,
                     'location' => $user->company_location ?? $user->location,
                     'description' => $user->company_description ?? null,
@@ -1681,8 +1688,8 @@ class RegisterController extends Controller
                     'unique_id' => $user->unique_id,
                     'usertype' => $user->usertype ?? 'professional',
                     'email_verified_at' => $user->email_verified_at,
-                    'profile_image' => $user->image ? asset('user_images/' . $user->image) : null,
-                    'cover_image' => $user->cover_image ? asset('user_images/' . $user->cover_image) : null,
+                    'profile_image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
+                    'cover_image' => $user->cover_image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->cover_image) : asset('user_images/' . $user->cover_image)) : null,
                     'headline' => $user->headline ?? null,
                     'location' => $user->location ?? null,
                     'summary' => $user->getProfileSummary('summary') ?? null,
@@ -1896,8 +1903,8 @@ class RegisterController extends Controller
                 'name' => $user->usertype === 'company' ? ($user->company_name ?? $user->name) : $user->getName(),
                 'usertype' => $user->usertype ?? 'user',
                 'image' => $user->usertype === 'company' 
-                    ? ($user->company_logo ? asset('company_logos/' . $user->company_logo) : null)
-                    : ($user->image ? asset('user_images/' . $user->image) : null),
+                    ? ($user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null)
+                    : ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null),
             ];
         }
 
@@ -2292,6 +2299,7 @@ class RegisterController extends Controller
                 $imagePath = public_path('company_logos/' . $fileName);
                 if (file_exists($imagePath)) {
                     $addWatermark($imagePath);
+                    \App\Helpers\ImageUploadingHelper::syncToStorage('company_logos', $fileName, false);
                 }
                 
                 $user->company_logo = $fileName;
@@ -2302,7 +2310,7 @@ class RegisterController extends Controller
                     'message' => 'Company logo updated successfully',
                     'data' => [
                         'user_type' => 'company',
-                        'image_url' => asset('company_logos/' . $fileName),
+                        'image_url' => (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $fileName) : asset('company_logos/' . $fileName)),
                         'name' => $user->company_name ?? $user->name,
                         'usertype' => 'company'
                     ]
@@ -2326,6 +2334,7 @@ class RegisterController extends Controller
                 $imagePath = public_path('user_images/' . $fileName);
                 if (file_exists($imagePath)) {
                     $addWatermark($imagePath);
+                    \App\Helpers\ImageUploadingHelper::syncToStorage('user_images', $fileName, false);
                 }
                 
                 $user->image = $fileName;
@@ -2337,7 +2346,7 @@ class RegisterController extends Controller
                     'data' => [
                         'user_type' => $user->usertype,
                         'usertype' => $user->usertype,
-                        'image_url' => asset('user_images/' . $fileName),
+                        'image_url' => (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $fileName) : asset('user_images/' . $fileName)),
                         'name' => $user->getName()
                     ]
                 ]);
@@ -2457,7 +2466,7 @@ class RegisterController extends Controller
             'area_of_interests' => $areaOfInterests,
             'email' => $user->email ?? '',
             'phone' => $user->phone ?? '',
-            'profile_image' => $user->image ? asset('user_images/' . $user->image) : null,
+            'profile_image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
             'visibility_control' => $user->visibility_control ?? 'public',
             'post_visibility_control' => $user->post_visibility_control ?? 'public',
             'message_visibility_control' => $user->message_visibility_control ?? 'public',
@@ -2495,7 +2504,7 @@ class RegisterController extends Controller
             'upi_id' => $user->upi_id ?? '',
             'address' => $user->company_location ?? $user->location ?? '',
             'description' => $user->company_description ?? '',
-            'logo' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : null,
+            'logo' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null,
             'industry' => $industry ? $industry->industry : '',
             'visibility_control' => $user->visibility_control ?? 'public',
             'post_visibility_control' => $user->post_visibility_control ?? 'public',
@@ -3123,8 +3132,8 @@ class RegisterController extends Controller
                         'name' => $targetUser->usertype === 'company' ? ($targetUser->company_name ?? $targetUser->name) : $targetUser->getName(),
                         'usertype' => $targetUser->usertype,
                         'image' => $targetUser->usertype === 'company' 
-                            ? ($targetUser->company_logo ? asset('company_logos/' . $targetUser->company_logo) : null)
-                            : ($targetUser->image ? asset('user_images/' . $targetUser->image) : null),
+                            ? ($targetUser->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $targetUser->company_logo) : asset('company_logos/' . $targetUser->company_logo)) : null)
+                            : ($targetUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $targetUser->image) : asset('user_images/' . $targetUser->image)) : null),
                         'headline' => $targetUser->headline ?? null,
                         'location' => $targetUser->location ?? ($targetUser->usertype === 'company' ? $targetUser->company_location : null),
                         'visibility_control' => $targetUser->visibility_control ?? 'public',
@@ -3276,10 +3285,10 @@ class RegisterController extends Controller
                 // Get proper image based on user type
                 $userImage = null;
                 if ($user->usertype === 'company') {
-                    $userImage = $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                                 ($user->image ? asset('user_images/' . $user->image) : null);
+                    $userImage = $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                                 ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null);
                 } else {
-                    $userImage = $user->image ? asset('user_images/' . $user->image) : null;
+                    $userImage = $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null;
                 }
                 
                 $mutualConnections[] = [
@@ -3612,8 +3621,8 @@ class RegisterController extends Controller
             'email' => $user->email,
             'unique_id' => $user->unique_id,
             'usertype' => $user->usertype ?? 'professional',
-            'profile_image' => $user->image ? asset('user_images/' . $user->image) : null,
-            'cover_image' => $user->cover_image ? asset('user_images/' . $user->cover_image) : null,
+            'profile_image' => $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null,
+            'cover_image' => $user->cover_image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->cover_image) : asset('user_images/' . $user->cover_image)) : null,
             'headline' => $user->headline ?? null,
             'location' => $user->location ?? null,
             'summary' => $user->getProfileSummary('summary') ?? null,
@@ -3743,7 +3752,7 @@ class RegisterController extends Controller
                     'id' => $follower->id,
                     'name' => $follower->getName(),
                     'headline' => $follower->headline,
-                    'image' => $follower->image ? asset('user_images/' . $follower->image) : null,
+                    'image' => $follower->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $follower->image) : asset('user_images/' . $follower->image)) : null,
                 ];
             }
         }
@@ -3778,7 +3787,7 @@ class RegisterController extends Controller
             'unique_id' => $user->unique_id,
             'usertype' => 'company',
             'slug' => $user->company_slug,
-            'logo' => $user->company_logo ? asset('company_logos/' . $user->company_logo) : null,
+            'logo' => $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : null,
             'industry' => $user->getIndustry('industry') ?? null,
             'location' => $user->company_location ?? $user->location ?? null,
             'description' => $user->company_description ?? null,

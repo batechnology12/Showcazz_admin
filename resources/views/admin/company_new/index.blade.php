@@ -141,9 +141,9 @@
                                         <td>{{ $company->id }}</td>
                                         <td>
                                             @if($company->company_logo)
-                                                <img src="{{ asset('company_logos/'.$company->company_logo) }}" alt="{{ $company->company_name ?? $company->name }}" style="max-width: 50px; max-height: 50px;">
+                                                <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $company->company_logo) : asset('company_logos/' . $company->company_logo)) }}" alt="{{ $company->company_name ?? $company->name }}" style="max-width: 50px; max-height: 50px;">
                                             @elseif($company->image)
-                                                <img src="{{ asset('user_images/'.$company->image) }}" alt="{{ $company->company_name ?? $company->name }}" style="max-width: 50px; max-height: 50px;">
+                                                <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $company->image) : asset('user_images/' . $company->image)) }}" alt="{{ $company->company_name ?? $company->name }}" style="max-width: 50px; max-height: 50px;">
                                             @else
                                                 <span class="label label-default">No Logo</span>
                                             @endif

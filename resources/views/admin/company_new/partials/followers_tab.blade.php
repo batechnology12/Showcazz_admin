@@ -20,7 +20,7 @@
                     <td>
                         @if($follower->user)
                             @if($follower->user->image)
-                                <img src="{{ asset('user_images/' . $follower->user->image) }}" 
+                                <img src="{{ (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $follower->user->image) : asset('user_images/' . $follower->user->image)) }}" 
                                      alt="{{ $follower->user->getName() }}" 
                                      style="max-width: 40px; max-height: 40px; border-radius: 50%;" 
                                      class="img-thumbnail">

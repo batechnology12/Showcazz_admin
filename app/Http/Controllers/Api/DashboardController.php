@@ -415,8 +415,8 @@ class DashboardController extends Controller
                 'email' => $entity->email ?? null,
                 'usertype' => 'company',
                 'headline' => $entity->company_description ?? $entity->headline,
-                'image' => $entity->company_logo ? asset('company_logos/' . $entity->company_logo) : 
-                         ($entity->image ? asset('user_images/' . $entity->image) : null),
+                'image' => $entity->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $entity->company_logo) : asset('company_logos/' . $entity->company_logo)) : 
+                         ($entity->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $entity->image) : asset('user_images/' . $entity->image)) : null),
                 'slug' => $entity->company_slug ?? null,
                 'visibility_control' => $visibilityMap[$entity->id]['profile'] ?? $entity->visibility_control ?? 'public',
                 'post_visibility_control' => $visibilityMap[$entity->id]['post'] ?? $entity->post_visibility_control ?? 'public',
@@ -436,7 +436,7 @@ class DashboardController extends Controller
             'email' => $entity->email ?? null,
             'usertype' => $entity->usertype ?? 'user',
             'headline' => $entity->headline ?? null,
-            'image' => $entity->image ? asset('user_images/' . $entity->image) : null,
+            'image' => $entity->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $entity->image) : asset('user_images/' . $entity->image)) : null,
             'slug' => null,
             'visibility_control' => $visibilityMap[$entity->id]['profile'] ?? $entity->visibility_control ?? 'public',
             'post_visibility_control' => $visibilityMap[$entity->id]['post'] ?? $entity->post_visibility_control ?? 'public',
@@ -1023,8 +1023,8 @@ class DashboardController extends Controller
                     : trim(($suggestedUser->first_name ?? '') . ' ' . ($suggestedUser->last_name ?? ''));
                 
                 $image = $suggestedUser->usertype === 'company'
-                    ? ($suggestedUser->company_logo ? asset('company_logos/' . $suggestedUser->company_logo) : null)
-                    : ($suggestedUser->image ? asset('user_images/' . $suggestedUser->image) : null);
+                    ? ($suggestedUser->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $suggestedUser->company_logo) : asset('company_logos/' . $suggestedUser->company_logo)) : null)
+                    : ($suggestedUser->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $suggestedUser->image) : asset('user_images/' . $suggestedUser->image)) : null);
                 
                 return [
                     'id' => $suggestedUser->id,
@@ -1332,10 +1332,10 @@ class DashboardController extends Controller
         
         $image = null;
         if ($user->usertype === 'company') {
-            $image = $user->company_logo ? asset('company_logos/' . $user->company_logo) : 
-                     ($user->image ? asset('user_images/' . $user->image) : null);
+            $image = $user->company_logo ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('company_logos/' . $user->company_logo) : asset('company_logos/' . $user->company_logo)) : 
+                     ($user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null);
         } else {
-            $image = $user->image ? asset('user_images/' . $user->image) : null;
+            $image = $user->image ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $user->image) : asset('user_images/' . $user->image)) : null;
         }
         
         $data = [
