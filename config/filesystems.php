@@ -60,6 +60,7 @@ return [
             'region' => env('DO_DEFAULT_REGION', 'nyc3'),
             'bucket' => env('DO_BUCKET'),
             'endpoint' => env('DO_ENDPOINT'),
+            'visibility' => 'public',
         ],
     ],
 ];

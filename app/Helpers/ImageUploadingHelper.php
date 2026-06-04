@@ -68,15 +68,18 @@ class ImageUploadingHelper
             $localPath = self::real_public_path() . $folderName . '/' . $fileName;
             if (file_exists($localPath)) {
                 \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName, new \Illuminate\Http\File($localPath), $fileName, 'public');
+                \Illuminate\Support\Facades\Storage::disk('do')->setVisibility($folderName . '/' . $fileName, 'public');
             }
             if ($hasOtherSizes) {
                 $mid = self::real_public_path() . $folderName . self::$midFolder . '/' . $fileName;
                 if (file_exists($mid)) {
                     \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName . self::$midFolder, new \Illuminate\Http\File($mid), $fileName, 'public');
+                    \Illuminate\Support\Facades\Storage::disk('do')->setVisibility($folderName . self::$midFolder . '/' . $fileName, 'public');
                 }
                 $thumb = self::real_public_path() . $folderName . self::$thumbFolder . '/' . $fileName;
                 if (file_exists($thumb)) {
                     \Illuminate\Support\Facades\Storage::disk('do')->putFileAs($folderName . self::$thumbFolder, new \Illuminate\Http\File($thumb), $fileName, 'public');
+                    \Illuminate\Support\Facades\Storage::disk('do')->setVisibility($folderName . self::$thumbFolder . '/' . $fileName, 'public');
                 }
             }
         }
