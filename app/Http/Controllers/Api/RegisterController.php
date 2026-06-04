@@ -1872,7 +1872,7 @@ class RegisterController extends Controller
                         'worth_discussing' => $postWorthDiscussing,
                     ],
                     'image' => $images[0] ?? null,
-                    'image_url' => isset($images[0]) ? asset('post_images/' . $images[0]) : null,
+                    'image_url' => isset($images[0]) ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $images[0]) : asset('post_images/' . $images[0])) : null,
                     'created_at' => $post->created_at,
                     'created_at_formatted' => $post->created_at->diffForHumans(),
                 ];
@@ -2865,7 +2865,7 @@ class RegisterController extends Controller
             // Format images
             $images = $post->images ? json_decode($post->images, true) : [];
             $formattedImages = array_map(function($img) {
-                return asset('post_images/' . $img);
+                return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $img) : asset('post_images/' . $img);
             }, $images);
             
             // ✅ NEW: Format files
@@ -2877,7 +2877,7 @@ class RegisterController extends Controller
                 
                 return [
                     'name' => $file,
-                    'url' => asset('post_files/' . $file),
+                    'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file),
                     'size' => $this->formatFileSize($fileSize),
                     'size_bytes' => $fileSize,
                     'extension' => $fileExtension,
@@ -2976,7 +2976,7 @@ class RegisterController extends Controller
                     // Format original post images
                     $originalImages = $originalPost->images ? json_decode($originalPost->images, true) : [];
                     $formattedOriginalImages = array_map(function($img) {
-                        return asset('post_images/' . $img);
+                        return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $img) : asset('post_images/' . $img);
                     }, $originalImages);
                     
                     // ✅ NEW: Format original post files
@@ -2988,7 +2988,7 @@ class RegisterController extends Controller
                         
                         return [
                             'name' => $file,
-                            'url' => asset('post_files/' . $file),
+                            'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file),
                             'size' => $this->formatFileSize($fileSize),
                             'size_bytes' => $fileSize,
                             'extension' => $fileExtension,
@@ -3318,7 +3318,7 @@ class RegisterController extends Controller
             // Format images
             $images = $post->images ? json_decode($post->images, true) : [];
             $formattedImages = array_map(function($img) {
-                return asset('post_images/' . $img);
+                return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $img) : asset('post_images/' . $img);
             }, $images);
             
             // Format files for user posts
@@ -3333,7 +3333,7 @@ class RegisterController extends Controller
                     
                     $formattedFiles[] = [
                         'name' => $file,
-                        'url' => asset('post_files/' . $file),
+                        'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file),
                         'size' => $this->formatFileSize($fileSize),
                         'size_bytes' => $fileSize,
                         'extension' => $fileExtension,

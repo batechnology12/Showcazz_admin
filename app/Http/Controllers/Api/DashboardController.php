@@ -1062,7 +1062,7 @@ class DashboardController extends Controller
         
         $images = $post->images ? json_decode($post->images, true) : [];
         $formattedImages = array_map(function($image) {
-            return asset('post_images/' . $image);
+            return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image);
         }, $images);
         
         // ✅ NEW: Format files
@@ -1074,7 +1074,7 @@ class DashboardController extends Controller
             
             return [
                 'name' => $file,
-                'url' => asset('post_files/' . $file),
+                'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file),
                 'size' => $this->formatFileSize($fileSize),
                 'size_bytes' => $fileSize,
                 'extension' => $fileExtension,

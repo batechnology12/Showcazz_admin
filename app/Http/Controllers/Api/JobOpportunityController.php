@@ -139,7 +139,7 @@ class JobOpportunityController extends Controller
         $images = [];
         if ($post->images) {
             $imgArray = is_array($post->images) ? $post->images : (json_decode($post->images, true) ?: []);
-            $images   = array_map(fn($img) => asset('post_images/' . $img), $imgArray);
+            $images   = array_map(fn($img) => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $img) : asset('post_images/' . $img), $imgArray);
         }
 
         $hasApplied = false;

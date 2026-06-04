@@ -2933,7 +2933,7 @@ public function getMessages_new(Request $request, $chatSessionId = null)
             'attachments' => array_map(function($attachment) {
                 return [
                     'filename' => $attachment['filename'] ?? '',
-                    'path' => isset($attachment['path']) ? asset('chat_attachments/' . $attachment['path']) : null,
+                    'path' => isset($attachment['path']) ? (env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('chat_attachments/' . $attachment['path']) : asset('chat_attachments/' . $attachment['path'])) : null,
                     'mime_type' => $attachment['mime_type'] ?? '',
                     'size' => $attachment['size'] ?? 0
                 ];

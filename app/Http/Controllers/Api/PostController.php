@@ -786,7 +786,7 @@ class PostController extends Controller
                 $path = public_path('post_images/' . $image);
                 return [
                     'name' => $image,
-                    'url' => asset('post_images/' . $image),
+                    'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image),
                     'size' => file_exists($path) ? filesize($path) : 0
                 ];
             }, $images),
@@ -795,7 +795,7 @@ class PostController extends Controller
                 $path = public_path('post_files/' . $file);
                 return [
                     'name' => $file,
-                    'url' => asset('post_files/' . $file),
+                    'url' => env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file),
                     'size' => file_exists($path) ? filesize($path) : 0
                 ];
             }, $files),
@@ -3784,7 +3784,7 @@ class PostController extends Controller
                 // Parse original post images
                 $originalImages = $originalPost->images ? json_decode($originalPost->images, true) : [];
                 $formattedOriginalImages = array_map(function($img) {
-                    return asset('post_images/' . $img);
+                    return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $img) : asset('post_images/' . $img);
                 }, $originalImages);
                 
                 $repostInfo = [
@@ -3859,10 +3859,10 @@ class PostController extends Controller
             'content' => html_entity_decode(strip_tags($post->content)),
             'short_description' => $post->short_description,
             'images' => array_map(function($image) {
-                return asset('post_images/' . $image);
+                return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_images/' . $image) : asset('post_images/' . $image);
             }, $images),
             'files' => array_map(function($file) {
-                return asset('post_files/' . $file);
+                return env('DO_ACCESS_KEY_ID') ? \Illuminate\Support\Facades\Storage::disk('do')->url('post_files/' . $file) : asset('post_files/' . $file);
             }, $files),
             'is_published' => $post->is_published,
             'is_liked' => $user ? $post->isLikedByUser($user->id) : false,
