@@ -363,6 +363,11 @@ public function downloadReceipt($companyId)
                 $file = $request->file($field);
                 $filename = $field . '.' . $file->getClientOriginalExtension();
                 $file->move($directoryPath, $filename);
+                
+                // Upload to DigitalOcean Spaces
+                \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('company_documents/' . $company->id, new \Illuminate\Http\File($directoryPath . '/' . $filename), $filename, 'public');
+                // Delete local temp file
+                @unlink($directoryPath . '/' . $filename);
     
                 // Optionally update the company record with the file path (e.g., in the database)
                 $company->$field = '/company_documents/' . $company->id . '/' . $filename;

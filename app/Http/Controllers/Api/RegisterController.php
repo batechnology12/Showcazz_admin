@@ -833,19 +833,6 @@ class RegisterController extends Controller
         }
     }
     
-    
-    public function getEditProfileData(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Not authenticated'
-                ], 401);
-            }
-
     public function getEditProfileData(Request $request)
     {
         try {

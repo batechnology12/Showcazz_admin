@@ -1419,6 +1419,11 @@ class ChatController extends Controller
                         $fileName = 'chat_' . time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
                         $file->move($uploadPath, $fileName);
                         
+                        // Upload to DigitalOcean Spaces
+                        \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('chat_attachments', new \Illuminate\Http\File($uploadPath . '/' . $fileName), $fileName, 'public');
+                        // Delete local temp file
+                        @unlink($uploadPath . '/' . $fileName);
+                        
                         $attachments[] = [
                             'filename' => $file->getClientOriginalName(),
                             'path' => $fileName,

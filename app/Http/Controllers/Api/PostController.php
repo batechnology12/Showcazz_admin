@@ -311,6 +311,11 @@ class PostController extends Controller
                     // Add watermark to the uploaded image
                     $this->addWatermarkToImage($uploadPath . '/' . $imageName);
                     
+                    // Upload to DigitalOcean Spaces
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_images', new \Illuminate\Http\File($uploadPath . '/' . $imageName), $imageName, 'public');
+                    // Delete local temp file
+                    @unlink($uploadPath . '/' . $imageName);
+                    
                     $imagePaths[] = $imageName;
                 }
             }
@@ -327,6 +332,12 @@ class PostController extends Controller
                 foreach ($request->file('files') as $file) {
                     $fileName = 'file_' . time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
                     $file->move($uploadPath, $fileName);
+                    
+                    // Upload to DigitalOcean Spaces
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_files', new \Illuminate\Http\File($uploadPath . '/' . $fileName), $fileName, 'public');
+                    // Delete local temp file
+                    @unlink($uploadPath . '/' . $fileName);
+                    
                     $filePaths[] = $fileName;
                 }
             }
@@ -977,6 +988,12 @@ class PostController extends Controller
                 foreach ($request->file('files') as $file) {
                     $fileName = 'file_' . time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
                     $file->move($uploadPath, $fileName);
+                    
+                    // Upload to DigitalOcean Spaces
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_files', new \Illuminate\Http\File($uploadPath . '/' . $fileName), $fileName, 'public');
+                    // Delete local temp file
+                    @unlink($uploadPath . '/' . $fileName);
+                    
                     $filePaths[] = $fileName;
                 }
             }
