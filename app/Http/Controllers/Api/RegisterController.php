@@ -372,6 +372,8 @@ class RegisterController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             
+            dd($e->getMessage(), $e->getTraceAsString());
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Registration failed',

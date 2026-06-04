@@ -282,3 +282,27 @@ Route::middleware('auth:sanctum')->group(function () {
     });
    
 });
+
+Route::post('/test-image-upload', function (\Illuminate\Http\Request $request) {
+    try {
+        if (!$request->hasFile('image')) {
+            return response()->json(['success' => false, 'message' => 'No image provided in request'], 400);
+        }
+
+        $file = $request->file('image');
+        $path = $file->store('test_uploads');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Image uploaded successfully',
+            'path' => $path,
+            'url' => \Illuminate\Support\Facades\Storage::url($path),
+            'disk' => config('filesystems.default')
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Upload failed: ' . $e->getMessage()
+        ], 500);
+    }
+});
