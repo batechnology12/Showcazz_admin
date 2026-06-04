@@ -664,7 +664,7 @@ class UniversalConnectionController extends Controller
             ], 500);
         }
     }
-}
+
 
     // ============================================
     // 7. GET BLOCK LIST
