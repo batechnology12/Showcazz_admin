@@ -283,21 +283,32 @@ Route::middleware('auth:sanctum')->group(function () {
    
 });
 
-Route::post('/test-image-upload', function (\Illuminate\Http\Request $request) {
+Route::post('/test-do-upload', function (\Illuminate\Http\Request $request) {
     try {
         if (!$request->hasFile('image')) {
             return response()->json(['success' => false, 'message' => 'No image provided in request'], 400);
         }
 
         $file = $request->file('image');
-        $path = $file->store('test_uploads');
+        $extension = $file->getClientOriginalExtension();
+        $fileName = 'direct_test_' . time() . '.' . $extension;
+
+        // Upload directly to DO Spaces without storing locally
+        \Illuminate\Support\Facades\Storage::disk('do')->putFileAs(
+            'user_images', 
+            $file, 
+            $fileName, 
+            'public'
+        );
+
+        $url = \Illuminate\Support\Facades\Storage::disk('do')->url('user_images/' . $fileName);
 
         return response()->json([
             'success' => true,
-            'message' => 'Image uploaded successfully',
-            'path' => $path,
-            'url' => \Illuminate\Support\Facades\Storage::url($path),
-            'disk' => config('filesystems.default')
+            'message' => 'Image uploaded directly to DO Spaces successfully',
+            'fileName' => $fileName,
+            'url' => $url,
+            'disk' => 'do'
         ]);
     } catch (\Exception $e) {
         return response()->json([
