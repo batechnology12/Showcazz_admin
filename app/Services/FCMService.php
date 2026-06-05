@@ -22,7 +22,7 @@ class FCMService
 
     public function fcmSendNotification($token, $title, $body, $data = [])
     {
-        $serviceAccount = json_decode(file_get_contents(storage_path('app/medical-app.json')), true);
+        $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
         $accessToken = $this->getAccessToken($serviceAccount);
 
         $notificationPayload = [

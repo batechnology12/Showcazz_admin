@@ -30,7 +30,8 @@ class FirebaseAnalyticsService
     private function initializeAnalytics()
     {
         try {
-            $serviceAccount = json_decode(file_get_contents(storage_path('app/medical-app.json')), true);
+            // Using base_path() so the file can be committed to Git (moved to root directory)
+            $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
             
             $client = new GoogleClient();
             $client->setAuthConfig($serviceAccount);
