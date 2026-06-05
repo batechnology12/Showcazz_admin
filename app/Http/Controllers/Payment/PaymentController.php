@@ -565,7 +565,10 @@ class PaymentController extends Controller
                 'razorpay_signature' => $request->razorpay_signature
             ];
 
-            $this->razorpay->utility->verifyPaymentSignature($attributes);
+            $keyId = env('RAZORPAY_KEY');
+            $keySecret = env('RAZORPAY_SECRET');
+            $razorpay = new Api($keyId, $keySecret);
+            $razorpay->utility->verifyPaymentSignature($attributes);
 
             return response()->json([
                 'success' => true,
@@ -707,7 +710,10 @@ class PaymentController extends Controller
             ];
 
             // Verify signature
-            $this->razorpay->utility->verifyPaymentSignature($attributes);
+            $keyId = env('RAZORPAY_KEY');
+            $keySecret = env('RAZORPAY_SECRET');
+            $razorpay = new Api($keyId, $keySecret);
+            $razorpay->utility->verifyPaymentSignature($attributes);
 
             // Find payment request
             $paymentRequest = PaymentRequest::where('razorpay_order_id', $request->razorpay_order_id)->first();
