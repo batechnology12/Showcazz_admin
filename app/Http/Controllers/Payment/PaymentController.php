@@ -585,4 +585,221 @@ class PaymentController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Create payment order for App SDK
+     */
+    public function createOrderForApp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'package_id' => 'required|exists:packages,id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => (object)$validator->errors()->toArray()
+            ], 422);
+        }
+
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            $package = Package::findOrFail($request->package_id);
+            
+            // Generate unique order number
+            $orderNumber = 'ORD-' . strtoupper(uniqid() . Str::random(6));
+
+            // Create payment request record
+            $paymentRequest = PaymentRequest::create([
+                'user_id' => $user->id,
+                'package_id' => $package->id,
+                'order_number' => $orderNumber,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'amount' => $package->package_price,
+                'currency' => 'INR',
+                'status' => 'pending',
+                'request_payload' => json_encode($request->all()),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            $keyId = env('RAZORPAY_KEY');
+            $keySecret = env('RAZORPAY_SECRET');
+            $razorpay = new Api($keyId, $keySecret);
+
+            // Create Razorpay Order
+            $orderData = [
+                'receipt'         => $paymentRequest->order_number,
+                'amount'          => (int)($package->package_price * 100), // amount in paise
+                'currency'        => 'INR',
+                'payment_capture' => 1 // auto capture
+            ];
+
+            $razorpayOrder = $razorpay->order->create($orderData);
+
+            // Update payment request with order ID
+            $paymentRequest->update([
+                'razorpay_order_id' => $razorpayOrder['id']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment order created successfully',
+                'data' => [
+                    'payment_request_id' => $paymentRequest->id,
+                    'order_number' => $paymentRequest->order_number,
+                    'razorpay_order_id' => $razorpayOrder['id'],
+                    'amount' => $package->package_price,
+                    'currency' => 'INR',
+                    'key_id' => $keyId,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Payment order creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment order creation failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify payment from App SDK and update status
+     */
+    public function verifyAppPayment(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'razorpay_payment_id' => 'required|string',
+                'razorpay_order_id' => 'required|string',
+                'razorpay_signature' => 'required|string'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => (object)$validator->errors()->toArray()
+                ], 422);
+            }
+
+            $attributes = [
+                'razorpay_order_id' => $request->razorpay_order_id,
+                'razorpay_payment_id' => $request->razorpay_payment_id,
+                'razorpay_signature' => $request->razorpay_signature
+            ];
+
+            // Verify signature
+            $this->razorpay->utility->verifyPaymentSignature($attributes);
+
+            // Find payment request
+            $paymentRequest = PaymentRequest::where('razorpay_order_id', $request->razorpay_order_id)->first();
+
+            if (!$paymentRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment request not found'
+                ], 404);
+            }
+
+            if ($paymentRequest->status === 'paid') {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment already verified'
+                ]);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                $paymentRequest->update([
+                    'status' => 'paid',
+                ]);
+
+                PaymentTransaction::create([
+                    'payment_request_id' => $paymentRequest->id,
+                    'razorpay_payment_id' => $request->razorpay_payment_id,
+                    'razorpay_order_id' => $request->razorpay_order_id,
+                    'razorpay_signature' => $request->razorpay_signature,
+                    'payment_method' => $request->payment_method ?? 'app',
+                    'amount' => $paymentRequest->amount,
+                    'currency' => $paymentRequest->currency,
+                    'status' => 'success',
+                    'payment_response' => $request->all(),
+                    'created_at' => now()
+                ]);
+
+                $this->activatePackageForUser($paymentRequest);
+                
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment verified successfully and package activated'
+                ]);
+                
+            } catch (Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Razorpay\Api\Errors\SignatureVerificationError $e) {
+            Log::error('Payment signature verification failed', [
+                'error' => $e->getMessage(),
+                'request' => $request->all()
+            ]);
+
+            // Update status to failed
+            $paymentRequest = PaymentRequest::where('razorpay_order_id', $request->razorpay_order_id)->first();
+            if ($paymentRequest) {
+                $paymentRequest->update(['status' => 'failed']);
+                
+                PaymentTransaction::create([
+                    'payment_request_id' => $paymentRequest->id,
+                    'razorpay_payment_id' => $request->razorpay_payment_id,
+                    'razorpay_order_id' => $request->razorpay_order_id,
+                    'amount' => $paymentRequest->amount,
+                    'currency' => $paymentRequest->currency,
+                    'status' => 'failed',
+                    'payment_response' => $request->all(),
+                    'created_at' => now()
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment signature verification failed',
+                'errors' => (object)['server' => 'Invalid signature']
+            ], 400);
+
+        } catch (Exception $e) {
+            Log::error('Payment verification failed', [
+                'error' => $e->getMessage(),
+                'request' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment verification failed',
+                'errors' => (object)['server' => 'An error occurred']
+            ], 500);
+        }
+    }
 }

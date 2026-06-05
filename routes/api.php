@@ -53,9 +53,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('connections/search_global', [UniversalConnectionController::class, 'globalSearch']);
     Route::post('/notification/toggle', [RegisterController::class, 'togglePushNotification']);
     
-    Route::post('/payment/create-link', [PaymentController::class, 'createPaymentLink']);
-    Route::get('/payment/status/{orderNumber}', [PaymentController::class, 'getPaymentStatus']);
+    // Route::post('/payment/create-link', [PaymentController::class, 'createPaymentLink']);
+    // Route::get('/payment/status/{orderNumber}', [PaymentController::class, 'getPaymentStatus']);
     
+    // App SDK Payment flow
+    Route::post('/payment/create-order', [PaymentController::class, 'createOrderForApp']);
+    Route::post('/payment/verify', [PaymentController::class, 'verifyAppPayment']);
+
     
     
     Route::get('/canPostJob', [SubscriptionController::class, 'canPostJob']);
@@ -283,6 +287,14 @@ Route::middleware('auth:sanctum')->group(function () {
    
 });
 
+Route::get('/debug-packages', function () {
+    $allPackages = \Illuminate\Support\Facades\DB::table('packages')->get();
+    return response()->json([
+        'total_packages' => count($allPackages),
+        'packages' => $allPackages
+    ]);
+});
+
 Route::get('/migrate-old-images', function () {
     try {
         $posts = \Illuminate\Support\Facades\DB::table('posts')
@@ -353,34 +365,4 @@ Route::get('/migrate-old-images', function () {
             'message' => 'Migration failed: ' . $e->getMessage()
         ], 500);
     }
-});
-
-Route::get('/debug-images', function () {
-    $dir = public_path('post_images');
-    $files = is_dir($dir) ? array_diff(scandir($dir), array('.', '..')) : [];
-    
-    $posts = \Illuminate\Support\Facades\DB::table('posts')->whereNotNull('images')->limit(5)->get();
-    $dbPathsChecked = [];
-    
-    foreach ($posts as $post) {
-        $images = json_decode($post->images, true);
-        if (is_string($images)) $images = json_decode($images, true);
-        if (is_array($images)) {
-            foreach ($images as $img) {
-                $localPath = public_path('post_images/' . $img);
-                $dbPathsChecked[] = [
-                    'image_name' => $img,
-                    'path_checked' => $localPath,
-                    'exists' => file_exists($localPath)
-                ];
-            }
-        }
-    }
-
-    return response()->json([
-        'public_path_post_images' => $dir,
-        'is_directory' => is_dir($dir),
-        'files_in_directory_sample' => array_slice(array_values($files), 0, 10),
-        'db_paths_checked' => $dbPathsChecked
-    ]);
 });

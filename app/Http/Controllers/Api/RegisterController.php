@@ -373,11 +373,9 @@ class RegisterController extends Controller
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed: ' . $e->getMessage(),
+                'message' => 'Registration failed',
                 'errors' => (object)[
-                    'server' => $e->getMessage(),
-                    'line' => $e->getLine(),
-                    'file' => $e->getFile()
+                    'server' => 'An error occurred during registration'
                 ]
             ], 500);
         }
