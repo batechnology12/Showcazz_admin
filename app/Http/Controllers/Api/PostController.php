@@ -960,6 +960,11 @@ class PostController extends Controller
     
                     $this->addWatermarkToImage($uploadPath . '/' . $imageName);
     
+                    // Upload to DigitalOcean Spaces
+                    \Illuminate\Support\Facades\Storage::disk('do')->putFileAs('post_images', new \Illuminate\Http\File($uploadPath . '/' . $imageName), $imageName, 'public');
+                    // Delete local temp file
+                    @unlink($uploadPath . '/' . $imageName);
+    
                     $imagePaths[] = $imageName;
                 }
             }
