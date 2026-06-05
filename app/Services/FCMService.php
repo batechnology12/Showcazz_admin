@@ -22,27 +22,33 @@ class FCMService
 
     public function fcmSendNotification($token, $title, $body, $data = [])
     {
-        $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
-        $accessToken = $this->getAccessToken($serviceAccount);
-
-        $notificationPayload = [
-            'message' => [
-                'token' => $token,
-                'notification' => [
-                    'title' => $title,
-                    'body'  => $body,
-                ],
-                'data' => !empty($data) ? $data : new \stdClass(),
-            ],
-        ];
-        // Log::info('🔥🔥🔥🔥🔥🔥FCM Request Payload', [
-        //     'token' => $token,
-        //     'title' => $title,
-        //     'body'  => $body,
-        //     'data'  => $data,
-        //     'payload' => $notificationPayload,
-        // ]);
         try {
+            $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
+            
+            // Fix literal newline characters if they were escaped during save
+            if (isset($serviceAccount['private_key'])) {
+                $serviceAccount['private_key'] = str_replace('\\n', "\n", $serviceAccount['private_key']);
+            }
+            
+            $accessToken = $this->getAccessToken($serviceAccount);
+    
+            $notificationPayload = [
+                'message' => [
+                    'token' => $token,
+                    'notification' => [
+                        'title' => $title,
+                        'body'  => $body,
+                    ],
+                    'data' => !empty($data) ? $data : new \stdClass(),
+                ],
+            ];
+            // Log::info('🔥🔥🔥🔥🔥🔥FCM Request Payload', [
+            //     'token' => $token,
+            //     'title' => $title,
+            //     'body'  => $body,
+            //     'data'  => $data,
+            //     'payload' => $notificationPayload,
+            // ]);
             $response = $this->client->post($this->url, [
                 'headers' => [
                     'Authorization' => "Bearer $accessToken",

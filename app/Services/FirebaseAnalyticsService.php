@@ -33,6 +33,11 @@ class FirebaseAnalyticsService
             // Using base_path() so the file can be committed to Git (moved to root directory)
             $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
             
+            // Fix literal newline characters if they were escaped during save
+            if (isset($serviceAccount['private_key'])) {
+                $serviceAccount['private_key'] = str_replace('\\n', "\n", $serviceAccount['private_key']);
+            }
+            
             $client = new GoogleClient();
             $client->setAuthConfig($serviceAccount);
             $client->addScope(Google_Service_Analytics::ANALYTICS_READONLY);
