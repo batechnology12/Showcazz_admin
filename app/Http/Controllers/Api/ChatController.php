@@ -252,7 +252,11 @@ class ChatController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete conversation',
-                'errors' => (object)['server' => 'An error occurred']
+                'errors' => (object)[
+                    'server' => 'An error occurred: ' . $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
             ], 500);
         }
     }
