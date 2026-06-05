@@ -85,11 +85,7 @@
                                     <div class="form-group @error('package_for') has-error @enderror">
                                         <label>Package For <span class="required">*</span></label>
                                         <select name="package_for" class="form-control" required>
-                                            <option value="">Select</option>
-                                            <option value="employer" {{ old('package_for', $package->package_for) == 'employer' ? 'selected' : '' }}>Employer</option>
-                                            <option value="job_seeker" {{ old('package_for', $package->package_for) == 'job_seeker' ? 'selected' : '' }}>Job Seeker</option>
-                                            <option value="cv_search" {{ old('package_for', $package->package_for) == 'cv_search' ? 'selected' : '' }}>CV Search</option>
-                                            <option value="featured" {{ old('package_for', $package->package_for) == 'featured' ? 'selected' : '' }}>Featured</option>
+                                            <option value="employer" selected>Employer</option>
                                         </select>
                                         @error('package_for')
                                             <span class="help-block">{{ $message }}</span>
@@ -105,22 +101,13 @@
                                         @enderror
                                     </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="form-group @error('badge_text') has-error @enderror">
-                                        <label>Badge Text (for popular packages)</label>
-                                        <input type="text" name="badge_text" class="form-control" value="{{ old('badge_text', $package->badge_text) }}" placeholder="e.g., Most Popular">
-                                        @error('badge_text')
-                                            <span class="help-block">{{ $message }}</span>
-                                        @enderror
-                                    </div>
-                                </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="form-group @error('package_features') has-error @enderror">
                                         <label>Package Features (One per line)</label>
-                                        <textarea name="package_features" class="form-control" rows="5">{{ old('package_features', $package->package_features) }}</textarea>
+                                        <textarea name="package_features" class="form-control" rows="5">{{ old('package_features', is_array($package->package_features) ? implode("\n", $package->package_features) : $package->package_features) }}</textarea>
                                         @error('package_features')
                                             <span class="help-block">{{ $message }}</span>
                                         @enderror
@@ -129,16 +116,6 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-3">
-                                    <div class="form-group">
-                                        <div class="checkbox">
-                                            <label>
-                                                <input type="checkbox" name="is_popular" value="1" {{ old('is_popular', $package->is_popular) ? 'checked' : '' }}>
-                                                Mark as Popular
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <div class="checkbox">

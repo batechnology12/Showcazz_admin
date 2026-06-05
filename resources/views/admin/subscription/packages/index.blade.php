@@ -81,10 +81,10 @@
                                         <th>Price</th>
                                         <th>Duration</th>
                                         <th>Listings</th>
-                                        <th>Popular</th>
                                         <th>Status</th>
                                         <th>Purchases</th>
                                         <th>Revenue</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -94,9 +94,6 @@
                                         <td>
                                             <strong>{{ $package->package_title }}</strong><br>
                                             <small>{{ $package->package_subtitle }}</small>
-                                            @if($package->is_popular)
-                                                <span class="label label-warning">{{ $package->badge_text ?? 'Popular' }}</span>
-                                            @endif
                                         </td>
                                         <td>
                                             @if($package->package_for == 'employer')
@@ -113,13 +110,6 @@
                                         <td>{{ $package->package_num_days }} days</td>
                                         <td>{{ $package->package_num_listings }}</td>
                                         <td>
-                                            @if($package->is_popular)
-                                                <span class="label label-success">Yes</span>
-                                            @else
-                                                <span class="label label-default">No</span>
-                                            @endif
-                                        </td>
-                                        <td>
                                             <button class="btn btn-xs {{ $package->status ? 'btn-success' : 'btn-danger' }} toggle-status" 
                                                     data-id="{{ $package->id }}">
                                                 {{ $package->status ? 'Active' : 'Inactive' }}
@@ -127,6 +117,11 @@
                                         </td>
                                         <td>{{ $package->purchases_count }}</td>
                                         <td>{{ $package->formatted_revenue }}</td>
+                                        <td>
+                                            <a href="{{ route('admin.subscriptions.packages.edit', $package->id) }}" class="btn btn-xs btn-primary">
+                                                <i class="fa fa-edit"></i> Edit
+                                            </a>
+                                        </td>
                                     </tr>
                                     @empty
                                     <tr>

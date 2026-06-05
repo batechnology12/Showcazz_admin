@@ -399,6 +399,11 @@ class AdminSubscriptionController extends Controller
         $data = $request->all();
         $data['status'] = $request->has('status');
         $data['is_popular'] = $request->has('is_popular');
+        
+        if (!empty($data['package_features']) && is_string($data['package_features'])) {
+            $features = array_filter(array_map('trim', explode("\n", $data['package_features'])));
+            $data['package_features'] = array_values($features);
+        }
 
         Package::create($data);
 
@@ -443,6 +448,11 @@ class AdminSubscriptionController extends Controller
         $data = $request->all();
         $data['status'] = $request->has('status');
         $data['is_popular'] = $request->has('is_popular');
+        
+        if (!empty($data['package_features']) && is_string($data['package_features'])) {
+            $features = array_filter(array_map('trim', explode("\n", $data['package_features'])));
+            $data['package_features'] = array_values($features);
+        }
 
         $package->update($data);
 
