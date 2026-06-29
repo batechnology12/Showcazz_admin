@@ -12,7 +12,7 @@ try {
     $user->visibility_control = 'public';
     $user->post_visibility_control = 'public';
     $user->message_visibility_control = 'public';
-    $user->name = 'Test Company';
+    $user->name = 'TestCompany';
     $user->is_active = 1;
     $user->save();
     echo "Success!\n";
