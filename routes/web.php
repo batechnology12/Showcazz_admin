@@ -126,6 +126,54 @@ Route::get('cronjob/recover-jobs', 'Job8Controller@recover_jobs')->name('recover
 Route::get('set-location', 'Job8Controller@set_location')->name('set_location');
 Route::post('ajax_upload_file', 'FilerController@upload')->name('filer.image-upload');
 Route::post('ajax_remove_file', 'FilerController@fileDestroy')->name('filer.image-remove');
+Route::get('/test-fcm-curl', function () {
+    $user = \App\User::where('email', 'testing@gmail.com')->first();
+    if (!$user) return 'User not found';
+
+    $deviceToken = null;
+    if (isset($user->firebase_token) && !empty($user->firebase_token)) {
+        $deviceToken = $user->firebase_token;
+    } else {
+        return 'No firebase_token found for testing@gmail.com';
+    }
+
+    try {
+        $fcm = new \App\Services\FCMService();
+        $reflection = new \ReflectionClass($fcm);
+        $method = $reflection->getMethod('getAccessToken');
+        $method->setAccessible(true);
+
+        $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
+        if (isset($serviceAccount['private_key'])) {
+            $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
+        }
+
+        $token = $method->invoke($fcm, $serviceAccount);
+        $projectId = $serviceAccount['project_id'];
+
+        $curl = "curl --location 'https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send' \\\n" .
+                "--header 'Authorization: Bearer {$token}' \\\n" .
+                "--header 'Content-Type: application/json' \\\n" .
+                "--data '{\n" .
+                "   \"message\": {\n" .
+                "     \"token\": \"{$deviceToken}\",\n" .
+                "     \"notification\": {\n" .
+                "       \"title\": \"Live Test Notification for testing@gmail.com\",\n" .
+                "       \"body\": \"This is a test message to verify push on live\"\n" .
+                "     },\n" .
+                "     \"data\": {\n" .
+                "       \"click_action\": \"FLUTTER_NOTIFICATION_CLICK\"\n" .
+                "     }\n" .
+                "   }\n" .
+                " }'";
+
+        return "<pre>$curl</pre>";
+
+    } catch (\Exception $e) {
+        return "Error: " . $e->getMessage();
+    }
+});
+
 Route::get('/clear-cache', function () {
   $exitCode = Artisan::call('config:clear');
   $exitCode = Artisan::call('cache:clear');
