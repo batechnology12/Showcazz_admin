@@ -40,6 +40,13 @@ try {
     $token = $method->invoke($fcm, $serviceAccount);
     $projectId = $serviceAccount['project_id'];
 
+    echo "\n\033[36m=== DEBUG INFO ===\033[0m\n";
+    echo "Email: {$email}\n";
+    echo "FCM Device Token: {$deviceToken}\n";
+    echo "Project ID: {$projectId}\n";
+    echo "Service Account Email: {$serviceAccount['client_email']}\n";
+    echo "Generated Bearer Token: " . substr($token, 0, 15) . "...(truncated)\n";
+
     echo "\n\033[32m=== COPY PASTE AND RUN THE BELOW CURL COMMAND ===\033[0m\n\n";
     echo "curl --location 'https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send' \\\n";
     echo "--header 'Authorization: Bearer {$token}' \\\n";
@@ -58,5 +65,10 @@ try {
     echo " }'\n\n";
     
 } catch (\Exception $e) {
-    echo "Error generating token: " . $e->getMessage() . "\n";
+    echo "\n\033[31mError generating token: " . $e->getMessage() . "\033[0m\n";
+    echo "\n\033[36m=== DEBUG INFO ===\033[0m\n";
+    echo "Email: " . ($email ?? 'N/A') . "\n";
+    echo "FCM Device Token: " . ($deviceToken ?? 'N/A') . "\n";
+    echo "Project ID: " . ($serviceAccount['project_id'] ?? 'N/A') . "\n";
+    echo "Service Account Email: " . ($serviceAccount['client_email'] ?? 'N/A') . "\n";
 }

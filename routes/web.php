@@ -170,10 +170,22 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
                 "   }\n" .
                 " }'";
 
-        return "<pre>$curl</pre>";
+        $debugInfo = "<h3>DEBUG INFO</h3>\n" .
+                     "<b>Email:</b> {$email}<br>\n" .
+                     "<b>FCM Device Token:</b> {$deviceToken}<br>\n" .
+                     "<b>Project ID:</b> {$projectId}<br>\n" .
+                     "<b>Service Account Email:</b> {$serviceAccount['client_email']}<br>\n" .
+                     "<b>Generated Bearer Token:</b> " . substr($token, 0, 15) . "...(truncated)<br><br>\n";
+
+        return $debugInfo . "<h3>CURL COMMAND</h3><pre>$curl</pre>";
 
     } catch (\Exception $e) {
-        return "Error: " . $e->getMessage();
+        $debugInfo = "<h3>DEBUG INFO</h3>\n" .
+                     "<b>Email:</b> " . ($email ?? 'N/A') . "<br>\n" .
+                     "<b>FCM Device Token:</b> " . ($deviceToken ?? 'N/A') . "<br>\n" .
+                     "<b>Project ID:</b> " . ($serviceAccount['project_id'] ?? 'N/A') . "<br>\n" .
+                     "<b>Service Account Email:</b> " . ($serviceAccount['client_email'] ?? 'N/A') . "<br>\n";
+        return "<h3 style='color:red;'>Error: " . $e->getMessage() . "</h3>" . $debugInfo;
     }
 });
 
