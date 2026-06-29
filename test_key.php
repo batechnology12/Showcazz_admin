@@ -1,3 +1,6 @@
 <?php
-$s = json_decode(file_get_contents('c:/xampp/htdocs/showcazz/Showcazz_admin/medical-app.json'), true);
-echo substr($s['private_key'], 0, 100);
+$serviceAccount = json_decode(file_get_contents(__DIR__.'/medical-app.json'), true);
+$pk = $serviceAccount['private_key'];
+$res = openssl_pkey_get_private($pk);
+var_dump($res);
+echo openssl_error_string();
