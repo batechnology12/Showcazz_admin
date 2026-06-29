@@ -919,7 +919,7 @@ class UniversalConnectionController extends Controller
                         $q->where('usertype', '!=', 'company')
                         ->orWhere('is_company_profile_completed', 1);
                     })
-                // ->where('is_company_profile_completed', 1)
+                
                 ->whereNotIn('id', $excludedIds)
                 ->select(
                     'id', 'first_name', 'last_name', 'name',
