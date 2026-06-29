@@ -18,7 +18,7 @@ try {
     
     if ($result) {
         $url = Storage::disk('do')->url('post_images/' . $fileName);
-        echo "Upload Successful! URL: " . $url . "\n";
+        echo "UploadSuccessful! URL: " . $url . "\n";
     } else {
         echo "Upload Failed.\n";
     }
