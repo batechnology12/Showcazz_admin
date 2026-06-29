@@ -915,7 +915,11 @@ class UniversalConnectionController extends Controller
             $dbQuery = User::where('is_active', 1)
                 ->where('name', '!=', 'New User')
                 ->where('name', '!=', 'New Company')
-                ->where('is_company_profile_completed', 1)
+                ->where(function($q) {
+                        $q->where('usertype', '!=', 'company')
+                        ->orWhere('is_company_profile_completed', 1);
+                    })
+                // ->where('is_company_profile_completed', 1)
                 ->whereNotIn('id', $excludedIds)
                 ->select(
                     'id', 'first_name', 'last_name', 'name',
