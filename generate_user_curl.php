@@ -5,11 +5,17 @@ $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
 try {
+    if (empty($argv[1])) {
+        die("Usage: php generate_user_curl.php <email>\nExample: php generate_user_curl.php testing@gmail.com\n");
+    }
+    
+    $email = $argv[1];
+
     // Get user by email
-    $user = \App\User::where('email', 'testing@gmail.com')->first();
+    $user = \App\User::where('email', $email)->first();
     
     if (!$user) {
-        die("Error: User with email testing@gmail.com not found in the database.\n");
+        die("Error: User with email {$email} not found in the database.\n");
     }
     
     // Attempt to find device token column name
@@ -17,7 +23,7 @@ try {
     if (isset($user->firebase_token) && !empty($user->firebase_token)) {
         $deviceToken = $user->firebase_token;
     } else {
-        die("Error: firebase_token is empty for testing@gmail.com. Please make sure they have a valid token saved.\n");
+        die("Error: firebase_token is empty for {$email}. Please make sure they have a valid token saved.\n");
     }
 
     $fcm = new \App\Services\FCMService();
@@ -42,7 +48,7 @@ try {
     echo "   \"message\": {\n";
     echo "     \"token\": \"{$deviceToken}\",\n";
     echo "     \"notification\": {\n";
-    echo "       \"title\": \"Live Test Notification for testing@gmail.com\",\n";
+    echo "       \"title\": \"Live Test Notification for {$email}\",\n";
     echo "       \"body\": \"This is a test message to verify push on live\"\n";
     echo "     },\n";
     echo "     \"data\": {\n";

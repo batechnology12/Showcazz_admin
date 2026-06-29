@@ -126,15 +126,18 @@ Route::get('cronjob/recover-jobs', 'Job8Controller@recover_jobs')->name('recover
 Route::get('set-location', 'Job8Controller@set_location')->name('set_location');
 Route::post('ajax_upload_file', 'FilerController@upload')->name('filer.image-upload');
 Route::post('ajax_remove_file', 'FilerController@fileDestroy')->name('filer.image-remove');
-Route::get('/test-fcm-curl', function () {
-    $user = \App\User::where('email', 'testing@gmail.com')->first();
-    if (!$user) return 'User not found';
+Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
+    $email = $request->get('email');
+    if (!$email) return 'Please provide an email. Example: /test-fcm-curl?email=testing@gmail.com';
+
+    $user = \App\User::where('email', $email)->first();
+    if (!$user) return "User with email {$email} not found";
 
     $deviceToken = null;
     if (isset($user->firebase_token) && !empty($user->firebase_token)) {
         $deviceToken = $user->firebase_token;
     } else {
-        return 'No firebase_token found for testing@gmail.com';
+        return "No firebase_token found for {$email}";
     }
 
     try {
@@ -158,7 +161,7 @@ Route::get('/test-fcm-curl', function () {
                 "   \"message\": {\n" .
                 "     \"token\": \"{$deviceToken}\",\n" .
                 "     \"notification\": {\n" .
-                "       \"title\": \"Live Test Notification for testing@gmail.com\",\n" .
+                "       \"title\": \"Live Test Notification for {$email}\",\n" .
                 "       \"body\": \"This is a test message to verify push on live\"\n" .
                 "     },\n" .
                 "     \"data\": {\n" .
