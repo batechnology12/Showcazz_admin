@@ -17,7 +17,7 @@ try {
     // Simulate creating the file locally first (ImgUploader::UploadImage does this)
     file_put_contents($localPath, 'dummy image content');
     
-    echo "--- LOCAL STORAGE REPORT ---\n";
+    echo "--- LOCA STORAGE REPORT ---\n";
     echo "Status: SUCCESS\n";
     echo "Local File Location: " . $localPath . "\n";
     echo "Does file exist locally?: " . (file_exists($localPath) ? 'YES' : 'NO') . "\n\n";
