@@ -152,10 +152,13 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
             $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
         }
 
-        dd(
-            env('FIREBASE_PROJECT_ID'),
-            $serviceAccount['project_id']
-        );
+        $key = $serviceAccount['private_key'];
+
+        $key = str_replace('\\n', "\n", $key);
+
+        $result = openssl_pkey_get_private($key);
+
+        dd($result);
 
         $token = $method->invoke($fcm, $serviceAccount);
         $projectId = $serviceAccount['project_id'];
