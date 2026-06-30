@@ -41,7 +41,7 @@ try {
     $projectId = $serviceAccount['project_id'];
 
     echo "\n\033[36m=== DEBUG INFO ===\033[0m\n";
-    echo "Email: {$email}\n";
+    echo "Email ID: {$email}\n";
     echo "FCM Device Token: {$deviceToken}\n";
     echo "Project ID: {$projectId}\n";
     echo "Service Account Email: {$serviceAccount['client_email']}\n";
