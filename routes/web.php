@@ -150,6 +150,7 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
         if (isset($serviceAccount['private_key'])) {
             $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
         }
+        dd($serviceAccount['private_key']);
 
         $token = $method->invoke($fcm, $serviceAccount);
         $projectId = $serviceAccount['project_id'];
