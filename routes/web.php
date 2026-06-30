@@ -147,8 +147,16 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
         $method->setAccessible(true);
 
         $serviceAccount = json_decode(file_get_contents(base_path('medical-app.json')), true);
+        
+        // Override from .env for security
+        $serviceAccount['project_id'] = env('FIREBASE_PROJECT_ID', $serviceAccount['project_id'] ?? '');
+        $serviceAccount['private_key_id'] = env('FIREBASE_PRIVATE_KEY_ID', $serviceAccount['private_key_id'] ?? '');
+        $serviceAccount['private_key'] = env('FIREBASE_PRIVATE_KEY', $serviceAccount['private_key'] ?? '');
+        $serviceAccount['client_email'] = env('FIREBASE_CLIENT_EMAIL', $serviceAccount['client_email'] ?? '');
+        $serviceAccount['client_id'] = env('FIREBASE_CLIENT_ID', $serviceAccount['client_id'] ?? '');
+
         if (isset($serviceAccount['private_key'])) {
-            $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
+            $serviceAccount['private_key'] = str_replace(['\\n', '\n'], "\n", $serviceAccount['private_key']);
         }
 
         $token = $method->invoke($fcm, $serviceAccount);
