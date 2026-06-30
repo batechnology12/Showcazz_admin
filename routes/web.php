@@ -133,7 +133,6 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
     $user = \App\User::where('email', $email)->first();
     if (!$user) return "User with email {$email} not found";
 
-    
     $deviceToken = null;
     if (isset($user->firebase_token) && !empty($user->firebase_token)) {
         $deviceToken = $user->firebase_token;
@@ -151,14 +150,6 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
         if (isset($serviceAccount['private_key'])) {
             $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
         }
-
-        $key = $serviceAccount['private_key'];
-
-        $key = str_replace('\\n', "\n", $key);
-
-        $result = openssl_pkey_get_private($key);
-
-        dd($result);
 
         $token = $method->invoke($fcm, $serviceAccount);
         $projectId = $serviceAccount['project_id'];
