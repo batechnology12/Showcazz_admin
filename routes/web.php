@@ -131,8 +131,9 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
     if (!$email) return 'Please provide an email. Example: /test-fcm-curl?email=testing@gmail.com';
 
     $user = \App\User::where('email', $email)->first();
-    if (!$user) return "User with email {$email} nott found";
+    if (!$user) return "User with email {$email} not found";
 
+    
     $deviceToken = null;
     if (isset($user->firebase_token) && !empty($user->firebase_token)) {
         $deviceToken = $user->firebase_token;
@@ -150,7 +151,11 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
         if (isset($serviceAccount['private_key'])) {
             $serviceAccount['private_key'] = str_replace('\n', "\n", $serviceAccount['private_key']);
         }
-        dd($serviceAccount['private_key']);
+
+        dd(
+            env('FIREBASE_PROJECT_ID'),
+            $serviceAccount['project_id']
+        );
 
         $token = $method->invoke($fcm, $serviceAccount);
         $projectId = $serviceAccount['project_id'];
@@ -182,7 +187,7 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
 
     } catch (\Exception $e) {
         $debugInfo = "<h3>DEBUG INFO</h3>\n" .
-                     "<b>Email ID:</b> " . ($email ?? 'N/A') . "<br>\n" .
+                     "<b>Email:</b> " . ($email ?? 'N/A') . "<br>\n" .
                      "<b>FCM Device Token:</b> " . ($deviceToken ?? 'N/A') . "<br>\n" .
                      "<b>Project ID:</b> " . ($serviceAccount['project_id'] ?? 'N/A') . "<br>\n" .
                      "<b>Service Account Email:</b> " . ($serviceAccount['client_email'] ?? 'N/A') . "<br>\n";
