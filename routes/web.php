@@ -131,7 +131,7 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
     if (!$email) return 'Please provide an email. Example: /test-fcm-curl?email=testing@gmail.com';
 
     $user = \App\User::where('email', $email)->first();
-    if (!$user) return "User with email {$email} not found";
+    if (!$user) return "User with email {$email} nott found";
 
     $deviceToken = null;
     if (isset($user->firebase_token) && !empty($user->firebase_token)) {
