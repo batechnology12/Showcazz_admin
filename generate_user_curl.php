@@ -6,7 +6,7 @@ $kernel->bootstrap();
 
 try {
     if (empty($argv[1])) {
-        die("Usage: php generate_user_curl.php <email>\nExample: php generate_user_curl.php testing@gmail.com\n");
+        die("Usag: php generate_user_curl.php <email>\nExample: php generate_user_curl.php testing@gmail.com\n");
     }
     
     $email = $argv[1];
