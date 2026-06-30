@@ -182,7 +182,7 @@ Route::get('/test-fcm-curl', function (\Illuminate\Http\Request $request) {
 
     } catch (\Exception $e) {
         $debugInfo = "<h3>DEBUG INFO</h3>\n" .
-                     "<b>Email:</b> " . ($email ?? 'N/A') . "<br>\n" .
+                     "<b>Email ID:</b> " . ($email ?? 'N/A') . "<br>\n" .
                      "<b>FCM Device Token:</b> " . ($deviceToken ?? 'N/A') . "<br>\n" .
                      "<b>Project ID:</b> " . ($serviceAccount['project_id'] ?? 'N/A') . "<br>\n" .
                      "<b>Service Account Email:</b> " . ($serviceAccount['client_email'] ?? 'N/A') . "<br>\n";
