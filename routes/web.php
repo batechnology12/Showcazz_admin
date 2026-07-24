@@ -243,6 +243,7 @@ Route::get('/check-images-detailed', function () {
             '6_images_in_both_local_and_storage' => 0,
             '7_images_missing_everywhere' => 0,
             '8_ready_to_move_to_storage' => 0,
+            'sample_missing_images' => [] // To check exact string format
         ];
 
         // 5. Match and Compare Everything
@@ -275,6 +276,9 @@ Route::get('/check-images-detailed', function () {
                     $stats['6_images_in_both_local_and_storage']++; // Already moved, but local file not deleted
                 } else {
                     $stats['7_images_missing_everywhere']++; // Corrupted/Missing files
+                    if (count($stats['sample_missing_images']) < 5) {
+                        $stats['sample_missing_images'][] = $img;
+                    }
                 }
             }
         }
