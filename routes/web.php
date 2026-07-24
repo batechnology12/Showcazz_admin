@@ -212,8 +212,6 @@ Route::get('/check-images-detailed', function () {
         // 2. Posts that actually have an image string
         $postsWithImage = \Illuminate\Support\Facades\DB::table('posts')
             ->whereNotNull('images')
-            ->where('images', '!=', '[]')
-            ->where('images', '!=', '')
             ->get(['id', 'images']);
 
         // 3. Get all Local File names from public/post_images
@@ -249,6 +247,9 @@ Route::get('/check-images-detailed', function () {
 
         // 5. Match and Compare Everything
         foreach ($postsWithImage as $post) {
+            // Skip empty arrays or empty strings
+            if (empty($post->images) || $post->images === '[]' || $post->images === '""') continue;
+            
             // Decode the JSON array of images
             $images = json_decode($post->images, true); 
             
