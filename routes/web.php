@@ -211,9 +211,10 @@ Route::get('/check-images-detailed', function () {
         
         // 2. Posts that actually have an image string
         $postsWithImage = \Illuminate\Support\Facades\DB::table('posts')
-            ->whereNotNull('image')
-            ->where('image', '!=', '')
-            ->get(['id', 'image']);
+            ->whereNotNull('images')
+            ->where('images', '!=', '[]')
+            ->where('images', '!=', '')
+            ->get(['id', 'images']);
 
         // 3. Get all Local File names from public/post_images
         $localFiles = [];
@@ -248,8 +249,12 @@ Route::get('/check-images-detailed', function () {
 
         // 5. Match and Compare Everything
         foreach ($postsWithImage as $post) {
-            // If multiple images are stored as comma separated (img1.jpg,img2.jpg)
-            $images = explode(',', $post->image); 
+            // Decode the JSON array of images
+            $images = json_decode($post->images, true); 
+            
+            if (!is_array($images)) {
+                $images = [$post->images];
+            }
             
             foreach ($images as $img) {
                 $img = trim($img);
