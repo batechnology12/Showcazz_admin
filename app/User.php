@@ -19,7 +19,7 @@ class User extends Authenticatable implements MustVerifyEmail
     use CommonUserFunctions;
     use HasApiTokens;
     
-    // Online/Offline constants
+    // Online/Offine constants
     const ONLINE_THRESHOLD_SECONDS = 30; // User considered online if active in last 10 seconds
     
     /**
