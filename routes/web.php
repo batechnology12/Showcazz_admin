@@ -203,3 +203,86 @@ Route::get('/clear-cache', function () {
   $exitCode = Artisan::call('config:cache');
   return 'DONE'; //Return anything
 });
+
+Route::get('/check-images-detailed', function () {
+    try {
+        // 1. Total records in post table
+        $totalRecords = \Illuminate\Support\Facades\DB::table('posts')->count();
+        
+        // 2. Posts that actually have an image string
+        $postsWithImage = \Illuminate\Support\Facades\DB::table('posts')
+            ->whereNotNull('image')
+            ->where('image', '!=', '')
+            ->get(['id', 'image']);
+
+        // 3. Get all Local File names from public/post_images
+        $localFiles = [];
+        if (\Illuminate\Support\Facades\File::exists(public_path('post_images'))) {
+            $files = \Illuminate\Support\Facades\File::files(public_path('post_images'));
+            foreach($files as $file) {
+                $localFiles[] = $file->getFilename();
+            }
+        }
+        
+        // 4. Get all Storage (Bucket) File names
+        $doFiles = [];
+        try {
+            $files = \Illuminate\Support\Facades\Storage::disk('do')->files('post_images');
+            foreach($files as $file) {
+                $doFiles[] = basename($file);
+            }
+        } catch (\Exception $e) {
+            // If DO disk is not configured properly, it will safely skip without crashing
+        }
+
+        $stats = [
+            '1_total_records_in_db' => $totalRecords,
+            '2_total_posts_with_media' => count($postsWithImage),
+            '3_total_individual_images_in_db' => 0,
+            '4_images_in_local_only' => 0,
+            '5_images_in_storage_only' => 0,
+            '6_images_in_both_local_and_storage' => 0,
+            '7_images_missing_everywhere' => 0,
+            '8_ready_to_move_to_storage' => 0,
+        ];
+
+        // 5. Match and Compare Everything
+        foreach ($postsWithImage as $post) {
+            // If multiple images are stored as comma separated (img1.jpg,img2.jpg)
+            $images = explode(',', $post->image); 
+            
+            foreach ($images as $img) {
+                $img = trim($img);
+                if (empty($img)) continue;
+                
+                $stats['3_total_individual_images_in_db']++;
+                
+                $inLocal = in_array($img, $localFiles);
+                $inDO = in_array($img, $doFiles);
+                
+                if ($inLocal && !$inDO) {
+                    $stats['4_images_in_local_only']++;
+                    $stats['8_ready_to_move_to_storage']++; // These need to be uploaded!
+                } elseif (!$inLocal && $inDO) {
+                    $stats['5_images_in_storage_only']++;
+                } elseif ($inLocal && $inDO) {
+                    $stats['6_images_in_both_local_and_storage']++; // Already moved, but local file not deleted
+                } else {
+                    $stats['7_images_missing_everywhere']++; // Corrupted/Missing files
+                }
+            }
+        }
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => $stats
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'line' => $e->getLine()
+        ]);
+    }
+});
