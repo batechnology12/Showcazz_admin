@@ -259,10 +259,13 @@ Route::get('/check-images-detailed', function () {
                 $img = trim($img);
                 if (empty($img)) continue;
                 
+                // DB-la 'post_images/image.jpg' nu prefix oda save aagiruntha, basename pottu file name-ah mattum edukurom
+                $filename = basename(str_replace('\/', '/', $img));
+                
                 $stats['3_total_individual_images_in_db']++;
                 
-                $inLocal = in_array($img, $localFiles);
-                $inDO = in_array($img, $doFiles);
+                $inLocal = in_array($filename, $localFiles);
+                $inDO = in_array($filename, $doFiles);
                 
                 if ($inLocal && !$inDO) {
                     $stats['4_images_in_local_only']++;
@@ -270,8 +273,8 @@ Route::get('/check-images-detailed', function () {
                     
                     // Upload to Bucket if action=move is passed in URL
                     if (request()->query('action') == 'move') {
-                        $filePath = public_path('post_images/' . $img);
-                        \Illuminate\Support\Facades\Storage::disk('do')->put('post_images/' . $img, file_get_contents($filePath), 'public');
+                        $filePath = public_path('post_images/' . $filename);
+                        \Illuminate\Support\Facades\Storage::disk('do')->put('post_images/' . $filename, file_get_contents($filePath), 'public');
                         $stats['files_moved_just_now'] = ($stats['files_moved_just_now'] ?? 0) + 1;
                     }
                     
@@ -282,7 +285,7 @@ Route::get('/check-images-detailed', function () {
                 } else {
                     $stats['7_images_missing_everywhere']++; // Corrupted/Missing files
                     if (count($stats['sample_missing_images']) < 5) {
-                        $stats['sample_missing_images'][] = $img;
+                        $stats['sample_missing_images'][] = $filename;
                     }
                 }
             }
