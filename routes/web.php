@@ -251,12 +251,9 @@ Route::get('/check-images-detailed', function () {
             // Skip empty arrays or empty strings
             if (empty($post->images) || $post->images === '[]' || $post->images === '""') continue;
             
-            // Decode the JSON array of images
-            $images = json_decode($post->images, true); 
-            
-            if (!is_array($images)) {
-                $images = [$post->images];
-            }
+            // Extract exact filenames by removing JSON brackets, slashes and quotes
+            $cleanedStr = str_replace(['\\', '"', '[', ']'], '', $post->images);
+            $images = array_filter(explode(',', $cleanedStr));
             
             foreach ($images as $img) {
                 $img = trim($img);
@@ -270,6 +267,14 @@ Route::get('/check-images-detailed', function () {
                 if ($inLocal && !$inDO) {
                     $stats['4_images_in_local_only']++;
                     $stats['8_ready_to_move_to_storage']++; // These need to be uploaded!
+                    
+                    // Upload to Bucket if action=move is passed in URL
+                    if (request()->query('action') == 'move') {
+                        $filePath = public_path('post_images/' . $img);
+                        \Illuminate\Support\Facades\Storage::disk('do')->put('post_images/' . $img, file_get_contents($filePath), 'public');
+                        $stats['files_moved_just_now'] = ($stats['files_moved_just_now'] ?? 0) + 1;
+                    }
+                    
                 } elseif (!$inLocal && $inDO) {
                     $stats['5_images_in_storage_only']++;
                 } elseif ($inLocal && $inDO) {
